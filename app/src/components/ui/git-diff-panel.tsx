@@ -82,6 +82,27 @@ const getStatusBadgeColor = (status: string) => {
   }
 };
 
+const getStatusDisplayName = (status: string) => {
+  switch (status) {
+    case "A":
+      return "Added";
+    case "?":
+      return "Untracked";
+    case "D":
+      return "Deleted";
+    case "M":
+      return "Modified";
+    case "U":
+      return "Updated";
+    case "R":
+      return "Renamed";
+    case "C":
+      return "Copied";
+    default:
+      return "Changed";
+  }
+};
+
 /**
  * Parse unified diff format into structured data
  */
@@ -505,23 +526,41 @@ export function GitDiffPanel({
               {/* Summary bar */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4 flex-wrap">
-                  {files.map((file) => (
-                    <div
-                      key={file.path}
-                      className="flex items-center gap-1.5"
-                      title={file.path}
-                    >
-                      {getFileIcon(file.status)}
-                      <span
-                        className={cn(
-                          "text-xs px-1.5 py-0.5 rounded border",
-                          getStatusBadgeColor(file.status)
-                        )}
+                  {(() => {
+                    // Group files by status
+                    const statusGroups = files.reduce((acc, file) => {
+                      const status = file.status;
+                      if (!acc[status]) {
+                        acc[status] = {
+                          count: 0,
+                          statusText: getStatusDisplayName(status),
+                          files: []
+                        };
+                      }
+                      acc[status].count += 1;
+                      acc[status].files.push(file.path);
+                      return acc;
+                    }, {} as Record<string, {count: number, statusText: string, files: string[]}>);
+
+                    return Object.entries(statusGroups).map(([status, group]) => (
+                      <div
+                        key={status}
+                        className="flex items-center gap-1.5"
+                        title={group.files.join('\n')}
+                        data-testid={`git-status-group-${status.toLowerCase()}`}
                       >
-                        {file.statusText}
-                      </span>
-                    </div>
-                  ))}
+                        {getFileIcon(status)}
+                        <span
+                          className={cn(
+                            "text-xs px-1.5 py-0.5 rounded border font-medium",
+                            getStatusBadgeColor(status)
+                          )}
+                        >
+                          {group.count} {group.statusText}
+                        </span>
+                      </div>
+                    ));
+                  })()}
                 </div>
                 <div className="flex items-center gap-2">
                   <Button

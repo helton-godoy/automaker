@@ -292,5 +292,24 @@
     "skipTests": true,
     "model": "sonnet",
     "thinkingLevel": "medium"
+  },
+  {
+    "id": "feature-1765372497502-kxppqqv3k",
+    "category": "Uncategorized",
+    "description": "As u can see in our git diff panel on each new file its show modified or untracked if it untracked and that not good for ui / ux what if user / agett change over 40-50 files in one go this wiould be complete mess i would rather do 1 type for each with number and icon",
+    "steps": [],
+    "status": "verified",
+    "startedAt": "2025-12-10T13:15:19.417Z",
+    "imagePaths": [
+      {
+        "id": "img-1765372428239-jg07w3zxv",
+        "path": "/Users/shirone/Library/Application Support/automaker/images/1765372428236-6t02kvclp_SCR-20251210-mplr.png",
+        "filename": "SCR-20251210-mplr.png",
+        "mimeType": "image/png"
+      }
+    ],
+    "skipTests": false,
+    "model": "sonnet",
+    "thinkingLevel": "none"
   }
 ]
