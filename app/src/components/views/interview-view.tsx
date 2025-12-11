@@ -317,7 +317,7 @@ export function InterviewView() {
         id: `feature-${Date.now()}-0`,
         category: "Core",
         description: "Initial project setup",
-        status: "backlog",
+        status: "backlog" as const,
         steps: [
           "Step 1: Review app_spec.txt",
           "Step 2: Set up development environment",
@@ -325,7 +325,9 @@ export function InterviewView() {
         ],
         skipTests: true,
       };
-      await api.features.create(fullProjectPath, initialFeature);
+      if (api.features) {
+        await api.features.create(fullProjectPath, initialFeature);
+      }
 
       const project = {
         id: `project-${Date.now()}`,

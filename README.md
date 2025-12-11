@@ -20,53 +20,53 @@ Automaker is an autonomous AI development studio that helps you build software f
 
 ## Getting Started
 
-**Step 1:** Clone this repository:
+### Prerequisites
+
+- Node.js 18+
+- npm
+- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated
+
+### Quick Start
 
 ```bash
+# 1. Clone the repo
 git clone git@github.com:AutoMaker-Org/automaker.git
 cd automaker
-```
 
-**Step 2:** Install dependencies:
-
-```bash
+# 2. Install dependencies
 npm install
-```
 
-**Step 3:** Run the Claude Code setup token command:
-
-```bash
+# 3. Get your Claude Code OAuth token
 claude setup-token
-```
+# ⚠️ This prints your token - don't share your screen!
 
-> **⚠️ Warning:** This command will print your token to your terminal. Be careful if you're streaming or sharing your screen, as the token will be visible to anyone watching.
-
-**Step 4:** Export the Claude Code OAuth token in your shell:
-
-```bash
-export CLAUDE_CODE_OAUTH_TOKEN="your-token-here"
-```
-
-**Step 5:** Start the development server:
-
-```bash
+# 4. Set the token and run
+export CLAUDE_CODE_OAUTH_TOKEN="sk-ant-oat01-..."
 npm run dev:electron
 ```
 
-This will start both the Next.js development server and the Electron application.
+### Authentication Options
 
-**Step 6:** MOST IMPORANT: Run the Following after all is setup
+Automaker supports multiple authentication methods (in order of priority):
+
+| Method | Environment Variable | Description |
+|--------|---------------------|-------------|
+| OAuth Token (env) | `CLAUDE_CODE_OAUTH_TOKEN` | From `claude setup-token` - uses your Claude subscription |
+| OAuth Token (stored) | — | Stored in app credentials file |
+| API Key (stored) | — | Anthropic API key stored in app |
+| API Key (env) | `ANTHROPIC_API_KEY` | Pay-per-use API key |
+
+**Recommended:** Use `CLAUDE_CODE_OAUTH_TOKEN` if you have a Claude subscription.
+
+### Persistent Setup (Optional)
+
+Add to your `~/.bashrc` or `~/.zshrc`:
 
 ```bash
-echo "W"
-echo "W"
-echo "W"
-echo "W"
-echo "W"
-echo "W"
-echo "W"
-echo "W"
+export CLAUDE_CODE_OAUTH_TOKEN="sk-ant-oat01-your-token-here"
 ```
+
+Then restart your terminal or run `source ~/.bashrc`.
 
 ## Features
 

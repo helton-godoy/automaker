@@ -53,41 +53,22 @@ export function AuthenticationStatusDisplay({
               <>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-3 h-3 text-green-500 shrink-0" />
-                  <span className="text-muted-foreground">
-                    Method:{" "}
-                    <span className="font-mono text-foreground">
-                      {claudeAuthStatus.method === "oauth"
-                        ? "OAuth Token"
-                        : claudeAuthStatus.method === "api_key"
-                        ? "API Key"
-                        : "Unknown"}
-                    </span>
+                  <span className="text-green-400 font-medium">Authenticated</span>
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Info className="w-3 h-3 shrink-0" />
+                  <span>
+                    {claudeAuthStatus.method === "oauth_token_env"
+                      ? "Using CLAUDE_CODE_OAUTH_TOKEN"
+                      : claudeAuthStatus.method === "oauth_token"
+                      ? "Using stored OAuth token"
+                      : claudeAuthStatus.method === "api_key_env"
+                      ? "Using ANTHROPIC_API_KEY"
+                      : claudeAuthStatus.method === "api_key"
+                      ? "Using stored API key"
+                      : "Unknown method"}
                   </span>
                 </div>
-                {claudeAuthStatus.oauthTokenValid && (
-                  <div className="flex items-center gap-2 text-green-400">
-                    <CheckCircle2 className="w-3 h-3 shrink-0" />
-                    <span>OAuth token configured</span>
-                  </div>
-                )}
-                {claudeAuthStatus.apiKeyValid && (
-                  <div className="flex items-center gap-2 text-green-400">
-                    <CheckCircle2 className="w-3 h-3 shrink-0" />
-                    <span>API key configured</span>
-                  </div>
-                )}
-                {apiKeyStatus?.hasAnthropicKey && (
-                  <div className="flex items-center gap-2 text-blue-400">
-                    <Info className="w-3 h-3 shrink-0" />
-                    <span>Environment variable detected</span>
-                  </div>
-                )}
-                {apiKeys.anthropic && (
-                  <div className="flex items-center gap-2 text-blue-400">
-                    <Info className="w-3 h-3 shrink-0" />
-                    <span>Manual API key in settings</span>
-                  </div>
-                )}
               </>
             ) : apiKeyStatus?.hasAnthropicKey ? (
               <div className="flex items-center gap-2 text-blue-400">
@@ -100,9 +81,9 @@ export function AuthenticationStatusDisplay({
                 <span>Using manual API key from settings</span>
               </div>
             ) : (
-              <div className="flex items-center gap-1.5 text-muted-foreground py-0.5">
-                <AlertCircle className="w-2.5 h-2.5 shrink-0" />
-                <span className="text-xs">Not Setup</span>
+              <div className="flex items-center gap-1.5 text-yellow-500 py-0.5">
+                <AlertCircle className="w-3 h-3 shrink-0" />
+                <span className="text-xs">Not configured</span>
               </div>
             )}
           </div>
@@ -121,44 +102,21 @@ export function AuthenticationStatusDisplay({
               <>
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-3 h-3 text-green-500 shrink-0" />
-                  <span className="text-muted-foreground">
-                    Method:{" "}
-                    <span className="font-mono text-foreground">
-                      {codexAuthStatus.method === "cli_verified" ||
-                      codexAuthStatus.method === "cli_tokens"
-                        ? "CLI Login (OpenAI Account)"
-                        : codexAuthStatus.method === "api_key"
-                        ? "API Key (Auth File)"
-                        : codexAuthStatus.method === "env"
-                        ? "API Key (Environment)"
-                        : "Unknown"}
-                    </span>
+                  <span className="text-green-400 font-medium">Authenticated</span>
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Info className="w-3 h-3 shrink-0" />
+                  <span>
+                    {codexAuthStatus.method === "cli_verified" ||
+                    codexAuthStatus.method === "cli_tokens"
+                      ? "Using CLI login (OpenAI account)"
+                      : codexAuthStatus.method === "api_key"
+                      ? "Using stored API key"
+                      : codexAuthStatus.method === "env"
+                      ? "Using OPENAI_API_KEY"
+                      : "Unknown method"}
                   </span>
                 </div>
-                {codexAuthStatus.method === "cli_verified" ||
-                codexAuthStatus.method === "cli_tokens" ? (
-                  <div className="flex items-center gap-2 text-green-400">
-                    <CheckCircle2 className="w-3 h-3 shrink-0" />
-                    <span>Account authenticated</span>
-                  </div>
-                ) : codexAuthStatus.apiKeyValid ? (
-                  <div className="flex items-center gap-2 text-green-400">
-                    <CheckCircle2 className="w-3 h-3 shrink-0" />
-                    <span>API key configured</span>
-                  </div>
-                ) : null}
-                {apiKeyStatus?.hasOpenAIKey && (
-                  <div className="flex items-center gap-2 text-blue-400">
-                    <Info className="w-3 h-3 shrink-0" />
-                    <span>Environment variable detected</span>
-                  </div>
-                )}
-                {apiKeys.openai && (
-                  <div className="flex items-center gap-2 text-blue-400">
-                    <Info className="w-3 h-3 shrink-0" />
-                    <span>Manual API key in settings</span>
-                  </div>
-                )}
               </>
             ) : apiKeyStatus?.hasOpenAIKey ? (
               <div className="flex items-center gap-2 text-blue-400">
@@ -171,9 +129,9 @@ export function AuthenticationStatusDisplay({
                 <span>Using manual API key from settings</span>
               </div>
             ) : (
-              <div className="flex items-center gap-1.5 text-muted-foreground py-0.5">
-                <AlertCircle className="w-2.5 h-2.5 shrink-0" />
-                <span className="text-xs">Not Setup</span>
+              <div className="flex items-center gap-1.5 text-yellow-500 py-0.5">
+                <AlertCircle className="w-3 h-3 shrink-0" />
+                <span className="text-xs">Not configured</span>
               </div>
             )}
           </div>
@@ -189,19 +147,31 @@ export function AuthenticationStatusDisplay({
           </div>
           <div className="space-y-1.5 text-xs min-h-12">
             {apiKeyStatus?.hasGoogleKey ? (
-              <div className="flex items-center gap-2 text-blue-400">
-                <Info className="w-3 h-3 shrink-0" />
-                <span>Using environment variable (GOOGLE_API_KEY)</span>
-              </div>
+              <>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-3 h-3 text-green-500 shrink-0" />
+                  <span className="text-green-400 font-medium">Authenticated</span>
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Info className="w-3 h-3 shrink-0" />
+                  <span>Using GOOGLE_API_KEY</span>
+                </div>
+              </>
             ) : apiKeys.google ? (
-              <div className="flex items-center gap-2 text-blue-400">
-                <Info className="w-3 h-3 shrink-0" />
-                <span>Using manual API key from settings</span>
-              </div>
+              <>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-3 h-3 text-green-500 shrink-0" />
+                  <span className="text-green-400 font-medium">Authenticated</span>
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Info className="w-3 h-3 shrink-0" />
+                  <span>Using stored API key</span>
+                </div>
+              </>
             ) : (
-              <div className="flex items-center gap-1.5 text-muted-foreground py-0.5">
-                <AlertCircle className="w-2.5 h-2.5 shrink-0" />
-                <span className="text-xs">Not Setup</span>
+              <div className="flex items-center gap-1.5 text-yellow-500 py-0.5">
+                <AlertCircle className="w-3 h-3 shrink-0" />
+                <span className="text-xs">Not configured</span>
               </div>
             )}
           </div>

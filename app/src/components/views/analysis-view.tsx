@@ -764,7 +764,13 @@ ${Object.entries(projectAnalysis.filesByExtension)
       }
 
       for (const feature of detectedFeatures) {
-        await api.features.create(currentProject.path, feature);
+        await api.features.create(currentProject.path, {
+          id: crypto.randomUUID(),
+          category: feature.category,
+          description: feature.description,
+          steps: feature.steps,
+          status: "backlog",
+        });
       }
 
       setFeatureListGenerated(true);

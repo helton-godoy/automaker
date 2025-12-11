@@ -19,7 +19,10 @@ export interface ProjectInitResult {
  * Required files and directories in the .automaker directory
  * Note: app_spec.txt is NOT created automatically - user must set it up via the spec editor
  */
-const REQUIRED_STRUCTURE = {
+const REQUIRED_STRUCTURE: {
+  directories: string[];
+  files: Record<string, string>;
+} = {
   directories: [
     ".automaker",
     ".automaker/context",

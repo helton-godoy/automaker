@@ -13,10 +13,12 @@ export interface CliStatus {
 // Claude Auth Status
 export interface ClaudeAuthStatus {
   authenticated: boolean;
-  method: "oauth" | "api_key" | "none";
-  hasCredentialsFile: boolean;
+  method: "oauth_token_env" | "oauth_token" | "api_key" | "api_key_env" | "none";
+  hasCredentialsFile?: boolean;
   oauthTokenValid?: boolean;
   apiKeyValid?: boolean;
+  hasEnvOAuthToken?: boolean;
+  hasEnvApiKey?: boolean;
   error?: string;
 }
 

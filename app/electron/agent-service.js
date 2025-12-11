@@ -19,14 +19,12 @@ class AgentService {
     this.stateDir = path.join(appDataPath, "agent-sessions");
     this.metadataFile = path.join(appDataPath, "sessions-metadata.json");
     await fs.mkdir(this.stateDir, { recursive: true });
-    console.log("[AgentService] Initialized with state dir:", this.stateDir);
   }
 
   /**
    * Start or resume a conversation
    */
   async startConversation({ sessionId, workingDirectory }) {
-    console.log("[AgentService] Starting conversation:", sessionId);
 
     // Initialize session if it doesn't exist
     if (!this.sessions.has(sessionId)) {
@@ -307,7 +305,7 @@ class AgentService {
       };
     } catch (error) {
       if (error instanceof AbortError || error?.name === "AbortError") {
-        console.log("[AgentService] Query aborted");
+        // Query aborted
         session.isRunning = false;
         session.abortController = null;
         return { success: false, aborted: true };

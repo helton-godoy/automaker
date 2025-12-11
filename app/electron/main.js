@@ -70,9 +70,6 @@ app.whenReady().then(async () => {
         addAllowedPath(session.projectPath);
       }
     });
-    console.log(
-      `[Security] Pre-loaded ${allowedPaths.size} allowed paths from history`
-    );
   } catch (error) {
     console.error("Failed to load sessions for security whitelist:", error);
   }
@@ -101,7 +98,6 @@ const allowedPaths = new Set();
 function addAllowedPath(pathToAdd) {
   if (!pathToAdd) return;
   allowedPaths.add(path.resolve(pathToAdd));
-  console.log(`[Security] Added allowed path: ${pathToAdd}`);
 }
 
 /**
@@ -341,7 +337,6 @@ ipcMain.handle(
       // Write image to file
       await fs.writeFile(imageFilePath, base64Data, "base64");
 
-      console.log("[IPC] Saved image to .automaker/images:", imageFilePath);
       return { success: true, path: imageFilePath };
     } catch (error) {
       console.error("[IPC] Failed to save image:", error);
@@ -640,10 +635,6 @@ ipcMain.handle(
 ipcMain.handle(
   "auto-mode:verify-feature",
   async (_, { projectPath, featureId }) => {
-    console.log("[IPC] auto-mode:verify-feature called with:", {
-      projectPath,
-      featureId,
-    });
     try {
       const sendToRenderer = (data) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
@@ -669,10 +660,6 @@ ipcMain.handle(
 ipcMain.handle(
   "auto-mode:resume-feature",
   async (_, { projectPath, featureId }) => {
-    console.log("[IPC] auto-mode:resume-feature called with:", {
-      projectPath,
-      featureId,
-    });
     try {
       const sendToRenderer = (data) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
@@ -723,7 +710,6 @@ ipcMain.handle(
  * and update the app_spec.txt with tech stack and implemented features
  */
 ipcMain.handle("auto-mode:analyze-project", async (_, { projectPath }) => {
-  console.log("[IPC] auto-mode:analyze-project called with:", { projectPath });
   try {
     // Add project path to allowed paths
     addAllowedPath(projectPath);
@@ -748,7 +734,6 @@ ipcMain.handle("auto-mode:analyze-project", async (_, { projectPath }) => {
  * Stop a specific feature
  */
 ipcMain.handle("auto-mode:stop-feature", async (_, { featureId }) => {
-  console.log("[IPC] auto-mode:stop-feature called with:", { featureId });
   try {
     return await autoModeService.stopFeature({ featureId });
   } catch (error) {
@@ -763,12 +748,6 @@ ipcMain.handle("auto-mode:stop-feature", async (_, { featureId }) => {
 ipcMain.handle(
   "auto-mode:follow-up-feature",
   async (_, { projectPath, featureId, prompt, imagePaths }) => {
-    console.log("[IPC] auto-mode:follow-up-feature called with:", {
-      projectPath,
-      featureId,
-      prompt,
-      imagePaths,
-    });
     try {
       const sendToRenderer = (data) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
@@ -796,10 +775,6 @@ ipcMain.handle(
 ipcMain.handle(
   "auto-mode:commit-feature",
   async (_, { projectPath, featureId }) => {
-    console.log("[IPC] auto-mode:commit-feature called with:", {
-      projectPath,
-      featureId,
-    });
     try {
       const sendToRenderer = (data) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
@@ -957,8 +932,6 @@ let suggestionsExecution = null;
  * @param {string} suggestionType - Type of suggestions: "features", "refactoring", "security", "performance"
  */
 ipcMain.handle("suggestions:generate", async (_, { projectPath, suggestionType = "features" }) => {
-  console.log("[IPC] suggestions:generate called with:", { projectPath, suggestionType });
-
   try {
     // Check if already running
     if (suggestionsExecution && suggestionsExecution.isActive()) {
@@ -1008,7 +981,6 @@ ipcMain.handle("suggestions:generate", async (_, { projectPath, suggestionType =
  * Stop the current suggestions generation
  */
 ipcMain.handle("suggestions:stop", async () => {
-  console.log("[IPC] suggestions:stop called");
   try {
     if (suggestionsExecution && suggestionsExecution.abortController) {
       suggestionsExecution.abortController.abort();
@@ -1081,10 +1053,6 @@ ipcMain.handle("openai:test-connection", async (_, { apiKey }) => {
 ipcMain.handle(
   "worktree:revert-feature",
   async (_, { projectPath, featureId }) => {
-    console.log("[IPC] worktree:revert-feature called with:", {
-      projectPath,
-      featureId,
-    });
     try {
       const sendToRenderer = (data) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
@@ -1117,10 +1085,6 @@ let specRegenerationExecution = null;
 ipcMain.handle(
   "spec-regeneration:generate",
   async (_, { projectPath, projectDefinition }) => {
-    console.log("[IPC] spec-regeneration:generate called with:", {
-      projectPath,
-    });
-
     try {
       // Add project path to allowed paths
       addAllowedPath(projectPath);
@@ -1182,7 +1146,6 @@ ipcMain.handle(
  * Stop the current spec regeneration
  */
 ipcMain.handle("spec-regeneration:stop", async () => {
-  console.log("[IPC] spec-regeneration:stop called");
   try {
     if (
       specRegenerationExecution &&
@@ -1216,11 +1179,6 @@ ipcMain.handle("spec-regeneration:status", () => {
 ipcMain.handle(
   "spec-regeneration:create",
   async (_, { projectPath, projectOverview, generateFeatures = true }) => {
-    console.log("[IPC] spec-regeneration:create called with:", {
-      projectPath,
-      generateFeatures,
-    });
-
     try {
       // Add project path to allowed paths
       addAllowedPath(projectPath);
@@ -1282,11 +1240,6 @@ ipcMain.handle(
 ipcMain.handle(
   "worktree:merge-feature",
   async (_, { projectPath, featureId, options }) => {
-    console.log("[IPC] worktree:merge-feature called with:", {
-      projectPath,
-      featureId,
-      options,
-    });
     try {
       const sendToRenderer = (data) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
@@ -1412,7 +1365,6 @@ ipcMain.handle("setup:claude-status", async () => {
       "credentials.json"
     );
     const result = claudeCliDetector.getFullStatus(credentialsPath);
-    console.log("[IPC] setup:claude-status result:", result);
     return result;
   } catch (error) {
     console.error("[IPC] setup:claude-status error:", error);
@@ -1537,7 +1489,6 @@ ipcMain.handle("setup:auth-codex", async (event, { apiKey }) => {
  */
 ipcMain.handle("setup:store-api-key", async (_, { provider, apiKey }) => {
   try {
-    console.log("[IPC] setup:store-api-key called for provider:", provider);
     const configPath = path.join(app.getPath("userData"), "credentials.json");
     let credentials = {};
 
@@ -1559,7 +1510,6 @@ ipcMain.handle("setup:store-api-key", async (_, { provider, apiKey }) => {
       "utf-8"
     );
 
-    console.log("[IPC] setup:store-api-key stored successfully for:", provider);
     return { success: true };
   } catch (error) {
     console.error("[IPC] setup:store-api-key error:", error);
