@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getElectronAPI } from "@/lib/electron";
+import { Markdown } from "@/components/ui/markdown";
 
 interface InterviewMessage {
   id: string;
@@ -99,12 +100,23 @@ export function InterviewView() {
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout | undefined;
     if (messagesContainerRef.current) {
-      messagesContainerRef.current.scrollTo({
-        top: messagesContainerRef.current.scrollHeight,
-        behavior: "smooth",
-      });
+      // Use a small delay to ensure DOM is updated
+      timeoutId = setTimeout(() => {
+        if (messagesContainerRef.current) {
+          messagesContainerRef.current.scrollTo({
+            top: messagesContainerRef.current.scrollHeight,
+            behavior: "smooth",
+          });
+        }
+      }, 100);
     }
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, [messages]);
 
   // Auto-focus input
@@ -347,7 +359,7 @@ export function InterviewView() {
 
   return (
     <div
-      className="flex-1 flex flex-col content-bg"
+      className="flex-1 flex flex-col content-bg min-h-0"
       data-testid="interview-view"
     >
       {/* Header */}
@@ -431,10 +443,15 @@ export function InterviewView() {
               )}
             >
               <CardContent className="px-3 py-2">
-                <p className={cn(
-                  "text-sm whitespace-pre-wrap",
-                  message.role === "assistant" && "text-primary"
-                )}>{message.content}</p>
+                {message.role === "assistant" ? (
+                  <Markdown className="text-sm text-primary prose-headings:text-primary prose-strong:text-primary prose-code:text-primary">
+                    {message.content}
+                  </Markdown>
+                ) : (
+                  <p className="text-sm whitespace-pre-wrap">
+                    {message.content}
+                  </p>
+                )}
                 <p
                   className={cn(
                     "text-xs mt-1",

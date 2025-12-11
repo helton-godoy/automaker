@@ -157,7 +157,8 @@ export function WelcomeView() {
 
     if (!result.canceled && result.filePaths[0]) {
       const path = result.filePaths[0];
-      const name = path.split("/").pop() || "Untitled Project";
+      // Extract folder name from path (works on both Windows and Mac/Linux)
+      const name = path.split(/[/\\]/).filter(Boolean).pop() || "Untitled Project";
       await initializeAndOpenProject(path, name);
     }
   }, [initializeAndOpenProject]);
@@ -309,9 +310,9 @@ export function WelcomeView() {
               data-testid="new-project-card"
             >
               <div className="absolute inset-0 bg-gradient-to-br from-brand-500/5 to-purple-600/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              <div className="relative p-6">
-                <div className="flex items-start gap-4 mb-4">
-                  <div className="w-12 h-12 rounded-lg bg-linear-to-br from-brand-500 to-brand-600 shadow-lg shadow-brand-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <div className="relative p-6 h-full flex flex-col">
+                <div className="flex items-start gap-4 flex-1">
+                  <div className="w-12 h-12 rounded-lg bg-linear-to-br from-brand-500 to-brand-600 shadow-lg shadow-brand-500/20 flex items-center justify-center group-hover:scale-110 transition-transform shrink-0">
                     <Plus className="w-6 h-6 text-white" />
                   </div>
                   <div className="flex-1">
@@ -327,7 +328,7 @@ export function WelcomeView() {
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
-                      className="w-full bg-linear-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-600 text-primary-foreground border-0"
+                      className="w-full mt-4 bg-linear-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-600 text-primary-foreground border-0"
                       data-testid="create-new-project"
                     >
                       <Plus className="w-4 h-4 mr-2" />
@@ -361,9 +362,9 @@ export function WelcomeView() {
               data-testid="open-project-card"
             >
               <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-cyan-600/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              <div className="relative p-6">
-                <div className="flex items-start gap-4 mb-4">
-                  <div className="w-12 h-12 rounded-lg bg-muted border border-border flex items-center justify-center group-hover:scale-110 transition-transform">
+              <div className="relative p-6 h-full flex flex-col">
+                <div className="flex items-start gap-4 flex-1">
+                  <div className="w-12 h-12 rounded-lg bg-muted border border-border flex items-center justify-center group-hover:scale-110 transition-transform shrink-0">
                     <FolderOpen className="w-6 h-6 text-muted-foreground group-hover:text-foreground transition-colors" />
                   </div>
                   <div className="flex-1">
@@ -377,7 +378,7 @@ export function WelcomeView() {
                 </div>
                 <Button
                   variant="secondary"
-                  className="w-full bg-secondary hover:bg-secondary/80 text-foreground border border-border hover:border-border-glass"
+                  className="w-full mt-4 bg-secondary hover:bg-secondary/80 text-foreground border border-border hover:border-border-glass"
                   data-testid="open-existing-project"
                 >
                   <FolderOpen className="w-4 h-4 mr-2" />

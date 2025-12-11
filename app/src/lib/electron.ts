@@ -1743,7 +1743,7 @@ async function simulateSpecCreation(
 
   // Note: Features are now stored in .automaker/features/{id}/feature.json
   // The generateFeatures parameter is kept for API compatibility but features
-  // should be created through the features API, not written to feature_list.json
+  // should be created through the features API
 
   emitSpecRegenerationEvent({
     type: "spec_regeneration_complete",
