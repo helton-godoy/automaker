@@ -279,7 +279,18 @@ export function SpecView() {
 
     const unsubscribe = api.specRegeneration.onEvent(
       (event: SpecRegenerationEvent) => {
-        console.log("[SpecView] Regeneration event:", event.type);
+        console.log(
+          "[SpecView] Regeneration event:",
+          event.type,
+          "for project:",
+          event.projectPath
+        );
+
+        // Only handle events for the current project
+        if (event.projectPath !== currentProject?.path) {
+          console.log("[SpecView] Ignoring event - not for current project");
+          return;
+        }
 
         if (event.type === "spec_regeneration_progress") {
           // Extract phase from content if present

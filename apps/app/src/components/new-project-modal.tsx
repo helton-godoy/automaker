@@ -197,6 +197,7 @@ export function NewProjectModal({
       title: "Select Base Project Directory",
       description:
         "Choose the parent directory where your project will be created",
+      initialPath: workspaceDir || undefined,
     });
     if (selectedPath) {
       setWorkspaceDir(selectedPath);
@@ -281,7 +282,7 @@ export function NewProjectModal({
                 <>
                   Will be created at:{" "}
                   <code className="text-xs bg-muted px-1.5 py-0.5 rounded truncate">
-                    {projectPath || "..."}
+                    {projectPath || workspaceDir}
                   </code>
                 </>
               ) : (

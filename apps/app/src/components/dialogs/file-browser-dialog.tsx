@@ -33,6 +33,7 @@ interface BrowseResult {
   directories: DirectoryEntry[];
   drives?: string[];
   error?: string;
+  warning?: string;
 }
 
 interface FileBrowserDialogProps {
@@ -41,6 +42,7 @@ interface FileBrowserDialogProps {
   onSelect: (path: string) => void;
   title?: string;
   description?: string;
+  initialPath?: string;
 }
 
 export function FileBrowserDialog({
@@ -49,6 +51,7 @@ export function FileBrowserDialog({
   onSelect,
   title = "Select Project Directory",
   description = "Navigate to your project folder or paste a path directly",
+  initialPath,
 }: FileBrowserDialogProps) {
   const [currentPath, setCurrentPath] = useState<string>("");
   const [pathInput, setPathInput] = useState<string>("");
@@ -57,11 +60,13 @@ export function FileBrowserDialog({
   const [drives, setDrives] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [warning, setWarning] = useState("");
   const pathInputRef = useRef<HTMLInputElement>(null);
 
   const browseDirectory = async (dirPath?: string) => {
     setLoading(true);
     setError("");
+    setWarning("");
 
     try {
       // Get server URL from environment or default
@@ -82,6 +87,7 @@ export function FileBrowserDialog({
         setParentPath(result.parentPath);
         setDirectories(result.directories);
         setDrives(result.drives || []);
+        setWarning(result.warning || "");
       } else {
         setError(result.error || "Failed to browse directory");
       }
@@ -94,12 +100,24 @@ export function FileBrowserDialog({
     }
   };
 
-  // Load home directory on mount
+  // Reset current path when dialog closes
   useEffect(() => {
-    if (open && !currentPath) {
-      browseDirectory();
+    if (!open) {
+      setCurrentPath("");
+      setPathInput("");
+      setParentPath(null);
+      setDirectories([]);
+      setError("");
+      setWarning("");
     }
   }, [open]);
+
+  // Load initial path or home directory when dialog opens
+  useEffect(() => {
+    if (open && !currentPath) {
+      browseDirectory(initialPath);
+    }
+  }, [open, initialPath]);
 
   const handleSelectDirectory = (dir: DirectoryEntry) => {
     browseDirectory(dir.path);
@@ -246,7 +264,13 @@ export function FileBrowserDialog({
               </div>
             )}
 
-            {!loading && !error && directories.length === 0 && (
+            {warning && (
+              <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg mb-2">
+                <div className="text-sm text-yellow-500">{warning}</div>
+              </div>
+            )}
+
+            {!loading && !error && !warning && directories.length === 0 && (
               <div className="flex items-center justify-center h-full p-8">
                 <div className="text-sm text-muted-foreground">
                   No subdirectories found

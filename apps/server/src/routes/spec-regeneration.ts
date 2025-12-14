@@ -7,6 +7,7 @@ import { query, type Options } from "@anthropic-ai/claude-agent-sdk";
 import path from "path";
 import fs from "fs/promises";
 import type { EventEmitter } from "../lib/events.js";
+import { getAppSpecFormatInstruction } from "../lib/app-spec-format.js";
 
 let isRunning = false;
 let currentAbortController: AbortController | null = null;
@@ -111,8 +112,9 @@ export function createSpecRegenerationRoutes(events: EventEmitter): Router {
             JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
           );
           events.emit("spec-regeneration:event", {
-            type: "spec_error",
+            type: "spec_regeneration_error",
             error: error.message || String(error),
+            projectPath: projectPath,
           });
         })
         .finally(() => {
@@ -199,8 +201,9 @@ export function createSpecRegenerationRoutes(events: EventEmitter): Router {
             JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
           );
           events.emit("spec-regeneration:event", {
-            type: "spec_error",
+            type: "spec_regeneration_error",
             error: error.message || String(error),
+            projectPath: projectPath,
           });
         })
         .finally(() => {
@@ -345,30 +348,13 @@ async function generateSpec(
 Project Overview:
 ${projectOverview}
 
-Based on this overview, analyze the project and create a comprehensive specification that includes:
+Based on this overview, analyze the project directory (if it exists) and create a comprehensive specification. Use the Read, Glob, and Grep tools to explore the codebase and understand:
+- Existing technologies and frameworks
+- Project structure and architecture
+- Current features and capabilities
+- Code patterns and conventions
 
-1. **Project Summary** - Brief description of what the project does
-2. **Core Features** - Main functionality the project needs
-3. **Technical Stack** - Recommended technologies and frameworks
-4. **Architecture** - High-level system design
-5. **Data Models** - Key entities and their relationships
-6. **API Design** - Main endpoints/interfaces needed
-7. **User Experience** - Key user flows and interactions
-
-${
-  generateFeatures
-    ? `
-Also generate a list of features to implement. For each feature provide:
-- ID (lowercase-hyphenated)
-- Title
-- Description
-- Priority (1=high, 2=medium, 3=low)
-- Estimated complexity (simple, moderate, complex)
-`
-    : ""
-}
-
-Format your response as markdown. Be specific and actionable.`;
+${getAppSpecFormatInstruction()}`;
 
   console.log(`[SpecRegeneration] Prompt length: ${prompt.length} chars`);
 
@@ -430,8 +416,9 @@ Format your response as markdown. Be specific and actionable.`;
               `[SpecRegeneration] Text block received (${block.text.length} chars)`
             );
             events.emit("spec-regeneration:event", {
-              type: "spec_progress",
+              type: "spec_regeneration_progress",
               content: block.text,
+              projectPath: projectPath,
             });
           } else if (block.type === "tool_use") {
             console.log(`[SpecRegeneration] Tool use: ${block.name}`);
@@ -479,16 +466,47 @@ Format your response as markdown. Be specific and actionable.`;
 
   console.log("[SpecRegeneration] Spec saved successfully");
 
-  events.emit("spec-regeneration:event", {
-    type: "spec_complete",
-    specPath,
-    content: responseText,
-  });
-
-  // If generate features was requested, parse and create them
+  // Emit spec completion event
   if (generateFeatures) {
-    console.log("[SpecRegeneration] Starting feature generation...");
-    await parseAndCreateFeatures(projectPath, responseText, events);
+    // If features will be generated, emit intermediate completion
+    events.emit("spec-regeneration:event", {
+      type: "spec_regeneration_progress",
+      content: "[Phase: spec_complete] Spec created! Generating features...\n",
+      projectPath: projectPath,
+    });
+  } else {
+    // If no features, emit final completion
+    events.emit("spec-regeneration:event", {
+      type: "spec_regeneration_complete",
+      message: "Spec regeneration complete!",
+      projectPath: projectPath,
+    });
+  }
+
+  // If generate features was requested, generate them from the spec
+  if (generateFeatures) {
+    console.log("[SpecRegeneration] Starting feature generation from spec...");
+    // Create a new abort controller for feature generation
+    const featureAbortController = new AbortController();
+    try {
+      await generateFeaturesFromSpec(
+        projectPath,
+        events,
+        featureAbortController
+      );
+      // Final completion will be emitted by generateFeaturesFromSpec -> parseAndCreateFeatures
+    } catch (featureError) {
+      console.error(
+        "[SpecRegeneration] Feature generation failed:",
+        featureError
+      );
+      // Don't throw - spec generation succeeded, feature generation is optional
+      events.emit("spec-regeneration:event", {
+        type: "spec_regeneration_error",
+        error: (featureError as Error).message || "Feature generation failed",
+        projectPath: projectPath,
+      });
+    }
   }
 
   console.log(
@@ -520,8 +538,9 @@ async function generateFeaturesFromSpec(
   } catch (readError) {
     console.error("[SpecRegeneration] ❌ Failed to read spec file:", readError);
     events.emit("spec-regeneration:event", {
-      type: "features_error",
+      type: "spec_regeneration_error",
       error: "No project spec found. Generate spec first.",
+      projectPath: projectPath,
     });
     return;
   }
@@ -558,8 +577,9 @@ Generate 5-15 features that build on each other logically.`;
   console.log(`[SpecRegeneration] Prompt length: ${prompt.length} chars`);
 
   events.emit("spec-regeneration:event", {
-    type: "features_progress",
+    type: "spec_regeneration_progress",
     content: "Analyzing spec and generating features...\n",
+    projectPath: projectPath,
   });
 
   const options: Options = {
@@ -616,8 +636,9 @@ Generate 5-15 features that build on each other logically.`;
               `[SpecRegeneration] Feature text block received (${block.text.length} chars)`
             );
             events.emit("spec-regeneration:event", {
-              type: "features_progress",
+              type: "spec_regeneration_progress",
               content: block.text,
+              projectPath: projectPath,
             });
           }
         }
@@ -723,16 +744,17 @@ async function parseAndCreateFeatures(
     );
 
     events.emit("spec-regeneration:event", {
-      type: "features_complete",
-      features: createdFeatures,
-      count: createdFeatures.length,
+      type: "spec_regeneration_complete",
+      message: `Spec regeneration complete! Created ${createdFeatures.length} features.`,
+      projectPath: projectPath,
     });
   } catch (error) {
     console.error("[SpecRegeneration] ❌ parseAndCreateFeatures() failed:");
     console.error("[SpecRegeneration] Error:", error);
     events.emit("spec-regeneration:event", {
-      type: "features_error",
+      type: "spec_regeneration_error",
       error: (error as Error).message,
+      projectPath: projectPath,
     });
   }
 
