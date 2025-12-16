@@ -215,6 +215,8 @@ export function BoardView() {
   }, [hookFeatures, persistedCategories]);
 
   // Branch suggestions for the branch autocomplete
+  // Shows all local branches as suggestions, but users can type any new branch name
+  // When the feature is started, a worktree will be created if needed
   const [branchSuggestions, setBranchSuggestions] = useState<string[]>([]);
 
   // Fetch branches when project changes or worktrees are created/modified
@@ -283,6 +285,23 @@ export function BoardView() {
     });
   }, [hookFeatures, runningAutoTasks]);
 
+  // Get current worktree info (path and branch) for filtering features
+  // This needs to be before useBoardActions so we can pass currentWorktreeBranch
+  const currentWorktreeInfo = currentProject ? getCurrentWorktree(currentProject.path) : null;
+  const currentWorktreePath = currentWorktreeInfo?.path ?? null;
+  const currentWorktreeBranch = currentWorktreeInfo?.branch ?? null;
+  const worktreesByProject = useAppStore((s) => s.worktreesByProject);
+  const worktrees = useMemo(
+    () => (currentProject ? (worktreesByProject[currentProject.path] ?? EMPTY_WORKTREES) : EMPTY_WORKTREES),
+    [currentProject, worktreesByProject]
+  );
+
+  // Get the branch for the currently selected worktree (for defaulting new features)
+  // Use the branch from currentWorktreeInfo, or fall back to main worktree's branch
+  const selectedWorktreeBranch = currentWorktreeBranch
+    || worktrees.find(w => w.isMain)?.branch
+    || "main";
+
   // Extract all action handlers into a hook
   const {
     handleAddFeature,
@@ -329,6 +348,7 @@ export function BoardView() {
     outputFeature,
     projectPath: currentProject?.path || null,
     onWorktreeCreated: () => setWorktreeRefreshKey((k) => k + 1),
+    currentWorktreeBranch,
   });
 
   // Use keyboard shortcuts hook (after actions hook)
@@ -341,22 +361,6 @@ export function BoardView() {
   });
 
   // Use drag and drop hook
-  // Get current worktree info (path and branch) for filtering features
-  const currentWorktreeInfo = currentProject ? getCurrentWorktree(currentProject.path) : null;
-  const currentWorktreePath = currentWorktreeInfo?.path ?? null;
-  const currentWorktreeBranch = currentWorktreeInfo?.branch ?? null;
-  const worktreesByProject = useAppStore((s) => s.worktreesByProject);
-  const worktrees = useMemo(
-    () => (currentProject ? (worktreesByProject[currentProject.path] ?? EMPTY_WORKTREES) : EMPTY_WORKTREES),
-    [currentProject, worktreesByProject]
-  );
-
-  // Get the branch for the currently selected worktree (for defaulting new features)
-  // Use the branch from currentWorktreeInfo, or fall back to main worktree's branch
-  const selectedWorktreeBranch = currentWorktreeBranch
-    || worktrees.find(w => w.isMain)?.branch
-    || "main";
-
   const { activeFeature, handleDragStart, handleDragEnd } = useBoardDragDrop({
     features: hookFeatures,
     currentProject,
@@ -448,7 +452,7 @@ export function BoardView() {
           setShowCreateBranchDialog(true);
         }}
         runningFeatureIds={runningAutoTasks}
-        features={hookFeatures.map(f => ({ id: f.id, worktreePath: f.worktreePath }))}
+        features={hookFeatures.map(f => ({ id: f.id, worktreePath: f.worktreePath, branchName: f.branchName }))}
       />
 
       {/* Main Content Area */}

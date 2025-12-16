@@ -39,6 +39,7 @@ interface UseBoardActionsProps {
   outputFeature: Feature | null;
   projectPath: string | null;
   onWorktreeCreated?: () => void;
+  currentWorktreeBranch: string | null; // Branch name of the selected worktree for filtering
 }
 
 export function useBoardActions({
@@ -65,6 +66,7 @@ export function useBoardActions({
   outputFeature,
   projectPath,
   onWorktreeCreated,
+  currentWorktreeBranch,
 }: UseBoardActionsProps) {
   const {
     addFeature,
@@ -720,7 +722,24 @@ export function useBoardActions({
   );
 
   const handleStartNextFeatures = useCallback(async () => {
-    const backlogFeatures = features.filter((f) => f.status === "backlog");
+    // Filter backlog features by the currently selected worktree branch
+    // This ensures "G" only starts features from the filtered list
+    const backlogFeatures = features.filter((f) => {
+      if (f.status !== "backlog") return false;
+
+      // Determine the feature's branch (default to "main" if not set)
+      const featureBranch = f.branchName || "main";
+
+      // If no worktree is selected (currentWorktreeBranch is null or main-like),
+      // show features with no branch or "main"/"master" branch
+      if (!currentWorktreeBranch || currentWorktreeBranch === "main" || currentWorktreeBranch === "master") {
+        return !f.branchName || featureBranch === "main" || featureBranch === "master";
+      }
+
+      // Otherwise, only show features matching the selected worktree branch
+      return featureBranch === currentWorktreeBranch;
+    });
+
     const availableSlots =
       useAppStore.getState().maxConcurrency - runningAutoTasks.length;
 
@@ -734,7 +753,9 @@ export function useBoardActions({
 
     if (backlogFeatures.length === 0) {
       toast.info("Backlog empty", {
-        description: "No features in backlog to start.",
+        description: currentWorktreeBranch && currentWorktreeBranch !== "main" && currentWorktreeBranch !== "master"
+          ? `No features in backlog for branch "${currentWorktreeBranch}".`
+          : "No features in backlog to start.",
       });
       return;
     }
@@ -764,6 +785,7 @@ export function useBoardActions({
     getOrCreateWorktreeForFeature,
     persistFeatureUpdate,
     onWorktreeCreated,
+    currentWorktreeBranch,
   ]);
 
   const handleDeleteAllVerified = useCallback(async () => {

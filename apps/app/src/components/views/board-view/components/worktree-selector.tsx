@@ -62,6 +62,7 @@ interface DevServerInfo {
 interface FeatureInfo {
   id: string;
   worktreePath?: string;
+  branchName?: string; // Used as fallback to determine which worktree the spinner should show on
 }
 
 interface WorktreeSelectorProps {
@@ -302,14 +303,25 @@ export function WorktreeSelector({
       const feature = features.find((f) => f.id === featureId);
       if (!feature) return false;
 
-      // For main worktree, check features with no worktreePath or matching projectPath
+      // First, check if worktreePath is set and matches
       // Use pathsEqual for cross-platform compatibility (Windows uses backslashes)
-      if (worktree.isMain) {
-        return !feature.worktreePath || pathsEqual(feature.worktreePath, projectPath);
+      if (feature.worktreePath) {
+        if (worktree.isMain) {
+          // Feature has worktreePath - show on main only if it matches projectPath
+          return pathsEqual(feature.worktreePath, projectPath);
+        }
+        // For non-main worktrees, check if worktreePath matches
+        return pathsEqual(feature.worktreePath, worktreeKey);
       }
 
-      // For other worktrees, check if worktreePath matches
-      return pathsEqual(feature.worktreePath, worktreeKey);
+      // If worktreePath is not set, use branchName as fallback
+      if (feature.branchName) {
+        // Feature has a branchName - show spinner on the worktree with matching branch
+        return worktree.branch === feature.branchName;
+      }
+
+      // No worktreePath and no branchName - default to main
+      return worktree.isMain;
     });
   };
 
