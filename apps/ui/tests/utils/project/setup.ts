@@ -24,7 +24,7 @@ export async function setupMockProject(page: Page): Promise<void> {
         chatHistoryOpen: false,
         maxConcurrency: 3,
       },
-      version: 0,
+      version: 2, // Must match app-store.ts persist version
     };
 
     localStorage.setItem("automaker-storage", JSON.stringify(mockState));
@@ -57,7 +57,7 @@ export async function setupMockProjectWithConcurrency(
         chatHistoryOpen: false,
         maxConcurrency: maxConcurrency,
       },
-      version: 0,
+      version: 2, // Must match app-store.ts persist version
     };
 
     localStorage.setItem("automaker-storage", JSON.stringify(mockState));
@@ -101,7 +101,7 @@ export async function setupMockProjectAtConcurrencyLimit(
           runningAutoTasks: runningTasks,
           autoModeActivityLog: [],
         },
-        version: 0,
+        version: 2, // Must match app-store.ts persist version
       };
 
       localStorage.setItem("automaker-storage", JSON.stringify(mockState));
@@ -152,7 +152,7 @@ export async function setupMockProjectWithFeatures(
         autoModeActivityLog: [],
         features: mockFeatures,
       },
-      version: 0,
+      version: 2, // Must match app-store.ts persist version
     };
 
     localStorage.setItem("automaker-storage", JSON.stringify(mockState));
@@ -198,7 +198,7 @@ export async function setupMockProjectWithContextFile(
           chatHistoryOpen: false,
           maxConcurrency: 3,
         },
-        version: 0,
+        version: 2, // Must match app-store.ts persist version
       };
 
       localStorage.setItem("automaker-storage", JSON.stringify(mockState));
@@ -259,7 +259,7 @@ export async function setupMockProjectWithInProgressFeatures(
         autoModeActivityLog: [],
         features: mockFeatures,
       },
-      version: 0,
+      version: 2, // Must match app-store.ts persist version
     };
 
     localStorage.setItem("automaker-storage", JSON.stringify(mockState));
@@ -297,7 +297,7 @@ export async function setupMockProjectWithView(
         chatHistoryOpen: false,
         maxConcurrency: 3,
       },
-      version: 0,
+      version: 2, // Must match app-store.ts persist version
     };
 
     localStorage.setItem("automaker-storage", JSON.stringify(mockState));
@@ -321,7 +321,7 @@ export async function setupEmptyLocalStorage(page: Page): Promise<void> {
         chatHistoryOpen: false,
         maxConcurrency: 3,
       },
-      version: 0,
+      version: 2, // Must match app-store.ts persist version
     };
     localStorage.setItem("automaker-storage", JSON.stringify(mockState));
   });
@@ -361,7 +361,7 @@ export async function setupMockProjectsWithoutCurrent(
         chatHistoryOpen: false,
         maxConcurrency: 3,
       },
-      version: 0,
+      version: 2, // Must match app-store.ts persist version
     };
 
     localStorage.setItem("automaker-storage", JSON.stringify(mockState));
@@ -412,7 +412,7 @@ export async function setupMockProjectWithSkipTestsFeatures(
         autoModeActivityLog: [],
         features: mockFeatures,
       },
-      version: 0,
+      version: 2, // Must match app-store.ts persist version
     };
 
     localStorage.setItem("automaker-storage", JSON.stringify(mockState));
@@ -449,7 +449,7 @@ export async function setupMockMultipleProjects(
         chatHistoryOpen: false,
         maxConcurrency: 3,
       },
-      version: 0,
+      version: 2, // Must match app-store.ts persist version
     };
 
     localStorage.setItem("automaker-storage", JSON.stringify(mockState));
@@ -490,7 +490,7 @@ export async function setupMockProjectWithAgentOutput(
           chatHistoryOpen: false,
           maxConcurrency: 3,
         },
-        version: 0,
+        version: 2, // Must match app-store.ts persist version
       };
 
       localStorage.setItem("automaker-storage", JSON.stringify(mockState));
@@ -551,7 +551,7 @@ export async function setupMockProjectWithWaitingApprovalFeatures(
         autoModeActivityLog: [],
         features: mockFeatures,
       },
-      version: 0,
+      version: 2, // Must match app-store.ts persist version
     };
 
     localStorage.setItem("automaker-storage", JSON.stringify(mockState));
@@ -586,7 +586,7 @@ export async function setupFirstRun(page: Page): Promise<void> {
         },
         skipClaudeSetup: false,
       },
-      version: 0,
+      version: 2, // Must match app-store.ts persist version
     };
 
     localStorage.setItem("automaker-setup", JSON.stringify(setupState));
@@ -607,7 +607,7 @@ export async function setupFirstRun(page: Page): Promise<void> {
         autoModeActivityLog: [],
         currentView: "setup",
       },
-      version: 0,
+      version: 2, // Must match app-store.ts persist version
     };
 
     localStorage.setItem("automaker-storage", JSON.stringify(appState));
@@ -627,7 +627,7 @@ export async function setupComplete(page: Page): Promise<void> {
         currentStep: "complete",
         skipClaudeSetup: false,
       },
-      version: 0,
+      version: 2, // Must match app-store.ts persist version
     };
 
     localStorage.setItem("automaker-setup", JSON.stringify(setupState));
@@ -732,7 +732,7 @@ export async function setupMockProjectWithProfiles(
         features: [],
         currentView: "board", // Start at board, will navigate to profiles
       },
-      version: 0,
+      version: 2, // Must match app-store.ts persist version
     };
 
     localStorage.setItem("automaker-storage", JSON.stringify(mockState));
@@ -745,7 +745,7 @@ export async function setupMockProjectWithProfiles(
         currentStep: "complete",
         skipClaudeSetup: false,
       },
-      version: 0,
+      version: 2, // Must match app-store.ts persist version
     };
     localStorage.setItem("automaker-setup", JSON.stringify(setupState));
   }, options);

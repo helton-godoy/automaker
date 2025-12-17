@@ -333,7 +333,7 @@ export async function setupProjectWithPath(page: Page, projectPath: string): Pro
         },
         worktreesByProject: {},
       },
-      version: 0,
+      version: 2, // Must match app-store.ts persist version
     };
 
     localStorage.setItem("automaker-storage", JSON.stringify(mockState));
@@ -346,7 +346,7 @@ export async function setupProjectWithPath(page: Page, projectPath: string): Pro
         currentStep: "complete",
         skipClaudeSetup: false,
       },
-      version: 0,
+      version: 2, // Must match app-store.ts persist version
     };
     localStorage.setItem("automaker-setup", JSON.stringify(setupState));
   }, projectPath);
@@ -381,7 +381,7 @@ export async function setupProjectWithPathNoWorktrees(page: Page, projectPath: s
         currentWorktreeByProject: {},
         worktreesByProject: {},
       },
-      version: 0,
+      version: 2, // Must match app-store.ts persist version
     };
 
     localStorage.setItem("automaker-storage", JSON.stringify(mockState));
@@ -394,7 +394,7 @@ export async function setupProjectWithPathNoWorktrees(page: Page, projectPath: s
         currentStep: "complete",
         skipClaudeSetup: false,
       },
-      version: 0,
+      version: 2, // Must match app-store.ts persist version
     };
     localStorage.setItem("automaker-setup", JSON.stringify(setupState));
   }, projectPath);
@@ -433,7 +433,7 @@ export async function setupProjectWithStaleWorktree(page: Page, projectPath: str
         },
         worktreesByProject: {},
       },
-      version: 0,
+      version: 2, // Must match app-store.ts persist version
     };
 
     localStorage.setItem("automaker-storage", JSON.stringify(mockState));
@@ -446,7 +446,7 @@ export async function setupProjectWithStaleWorktree(page: Page, projectPath: str
         currentStep: "complete",
         skipClaudeSetup: false,
       },
-      version: 0,
+      version: 2, // Must match app-store.ts persist version
     };
     localStorage.setItem("automaker-setup", JSON.stringify(setupState));
   }, projectPath);

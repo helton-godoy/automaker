@@ -94,7 +94,7 @@ export async function setupProjectWithFixture(
         chatHistoryOpen: false,
         maxConcurrency: 3,
       },
-      version: 0,
+      version: 2, // Must match app-store.ts persist version
     };
 
     localStorage.setItem("automaker-storage", JSON.stringify(mockState));
@@ -107,7 +107,7 @@ export async function setupProjectWithFixture(
         currentStep: "complete",
         skipClaudeSetup: false,
       },
-      version: 0,
+      version: 2, // Must match app-store.ts persist version
     };
     localStorage.setItem("automaker-setup", JSON.stringify(setupState));
   }, projectPath);
