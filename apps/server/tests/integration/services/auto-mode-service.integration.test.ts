@@ -539,4 +539,201 @@ describe("auto-mode-service.ts (integration)", () => {
       expect(callCount).toBeGreaterThanOrEqual(1);
     }, 15000);
   });
+
+  describe("planning mode", () => {
+    it("should execute feature with skip planning mode", async () => {
+      await createTestFeature(testRepo.path, "skip-plan-feature", {
+        id: "skip-plan-feature",
+        category: "test",
+        description: "Feature with skip planning",
+        status: "pending",
+        planningMode: "skip",
+      });
+
+      const mockProvider = {
+        getName: () => "claude",
+        executeQuery: async function* () {
+          yield {
+            type: "assistant",
+            message: {
+              role: "assistant",
+              content: [{ type: "text", text: "Feature implemented" }],
+            },
+          };
+          yield {
+            type: "result",
+            subtype: "success",
+          };
+        },
+      };
+
+      vi.mocked(ProviderFactory.getProviderForModel).mockReturnValue(
+        mockProvider as any
+      );
+
+      await service.executeFeature(
+        testRepo.path,
+        "skip-plan-feature",
+        false,
+        false
+      );
+
+      const feature = await featureLoader.get(testRepo.path, "skip-plan-feature");
+      expect(feature?.status).toBe("waiting_approval");
+    }, 30000);
+
+    it("should execute feature with lite planning mode without approval", async () => {
+      await createTestFeature(testRepo.path, "lite-plan-feature", {
+        id: "lite-plan-feature",
+        category: "test",
+        description: "Feature with lite planning",
+        status: "pending",
+        planningMode: "lite",
+        requirePlanApproval: false,
+      });
+
+      const mockProvider = {
+        getName: () => "claude",
+        executeQuery: async function* () {
+          yield {
+            type: "assistant",
+            message: {
+              role: "assistant",
+              content: [{ type: "text", text: "[PLAN_GENERATED] Planning outline complete.\n\nFeature implemented" }],
+            },
+          };
+          yield {
+            type: "result",
+            subtype: "success",
+          };
+        },
+      };
+
+      vi.mocked(ProviderFactory.getProviderForModel).mockReturnValue(
+        mockProvider as any
+      );
+
+      await service.executeFeature(
+        testRepo.path,
+        "lite-plan-feature",
+        false,
+        false
+      );
+
+      const feature = await featureLoader.get(testRepo.path, "lite-plan-feature");
+      expect(feature?.status).toBe("waiting_approval");
+    }, 30000);
+
+    it("should emit planning_started event for spec mode", async () => {
+      await createTestFeature(testRepo.path, "spec-plan-feature", {
+        id: "spec-plan-feature",
+        category: "test",
+        description: "Feature with spec planning",
+        status: "pending",
+        planningMode: "spec",
+        requirePlanApproval: false,
+      });
+
+      const mockProvider = {
+        getName: () => "claude",
+        executeQuery: async function* () {
+          yield {
+            type: "assistant",
+            message: {
+              role: "assistant",
+              content: [{ type: "text", text: "Spec generated\n\n[SPEC_GENERATED] Review the spec." }],
+            },
+          };
+          yield {
+            type: "result",
+            subtype: "success",
+          };
+        },
+      };
+
+      vi.mocked(ProviderFactory.getProviderForModel).mockReturnValue(
+        mockProvider as any
+      );
+
+      await service.executeFeature(
+        testRepo.path,
+        "spec-plan-feature",
+        false,
+        false
+      );
+
+      // Check planning_started event was emitted
+      const planningEvent = mockEvents.emit.mock.calls.find(
+        (call) => call[1]?.mode === "spec"
+      );
+      expect(planningEvent).toBeTruthy();
+    }, 30000);
+
+    it("should handle feature with full planning mode", async () => {
+      await createTestFeature(testRepo.path, "full-plan-feature", {
+        id: "full-plan-feature",
+        category: "test",
+        description: "Feature with full planning",
+        status: "pending",
+        planningMode: "full",
+        requirePlanApproval: false,
+      });
+
+      const mockProvider = {
+        getName: () => "claude",
+        executeQuery: async function* () {
+          yield {
+            type: "assistant",
+            message: {
+              role: "assistant",
+              content: [{ type: "text", text: "Full spec with phases\n\n[SPEC_GENERATED] Review." }],
+            },
+          };
+          yield {
+            type: "result",
+            subtype: "success",
+          };
+        },
+      };
+
+      vi.mocked(ProviderFactory.getProviderForModel).mockReturnValue(
+        mockProvider as any
+      );
+
+      await service.executeFeature(
+        testRepo.path,
+        "full-plan-feature",
+        false,
+        false
+      );
+
+      // Check planning_started event was emitted with full mode
+      const planningEvent = mockEvents.emit.mock.calls.find(
+        (call) => call[1]?.mode === "full"
+      );
+      expect(planningEvent).toBeTruthy();
+    }, 30000);
+
+    it("should track pending approval correctly", async () => {
+      // Initially no pending approvals
+      expect(service.hasPendingApproval("non-existent")).toBe(false);
+    });
+
+    it("should cancel pending approval gracefully", () => {
+      // Should not throw when cancelling non-existent approval
+      expect(() => service.cancelPlanApproval("non-existent")).not.toThrow();
+    });
+
+    it("should resolve approval with error for non-existent feature", async () => {
+      const result = await service.resolvePlanApproval(
+        "non-existent",
+        true,
+        undefined,
+        undefined,
+        undefined
+      );
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("No pending approval");
+    });
+  });
 });
