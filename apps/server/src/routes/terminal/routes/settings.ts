@@ -8,14 +8,23 @@ import { getErrorMessage, logError } from "../common.js";
 
 export function createSettingsGetHandler() {
   return (_req: Request, res: Response): void => {
-    const terminalService = getTerminalService();
-    res.json({
-      success: true,
-      data: {
-        maxSessions: terminalService.getMaxSessions(),
-        currentSessions: terminalService.getSessionCount(),
-      },
-    });
+    try {
+      const terminalService = getTerminalService();
+      res.json({
+        success: true,
+        data: {
+          maxSessions: terminalService.getMaxSessions(),
+          currentSessions: terminalService.getSessionCount(),
+        },
+      });
+    } catch (error) {
+      logError(error, "Get terminal settings failed");
+      res.status(500).json({
+        success: false,
+        error: "Failed to get terminal settings",
+        details: getErrorMessage(error),
+      });
+    }
   };
 }
 

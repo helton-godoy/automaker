@@ -408,6 +408,7 @@ describe("terminal-service.ts", () => {
 
   describe("killSession", () => {
     it("should kill existing session", () => {
+      vi.useFakeTimers();
       vi.mocked(fs.existsSync).mockReturnValue(true);
       vi.mocked(fs.statSync).mockReturnValue({ isDirectory: () => true } as any);
       vi.spyOn(process, "env", "get").mockReturnValue({ SHELL: "/bin/bash" });
@@ -416,8 +417,15 @@ describe("terminal-service.ts", () => {
       const result = service.killSession(session.id);
 
       expect(result).toBe(true);
-      expect(mockPtyProcess.kill).toHaveBeenCalled();
+      expect(mockPtyProcess.kill).toHaveBeenCalledWith("SIGTERM");
+
+      // Session is removed after SIGKILL timeout (1 second)
+      vi.advanceTimersByTime(1000);
+
+      expect(mockPtyProcess.kill).toHaveBeenCalledWith("SIGKILL");
       expect(service.getSession(session.id)).toBeUndefined();
+
+      vi.useRealTimers();
     });
 
     it("should return false for non-existent session", () => {

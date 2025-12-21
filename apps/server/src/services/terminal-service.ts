@@ -181,8 +181,10 @@ export class TerminalService extends EventEmitter {
     }
 
     // Normalize the path to resolve . and .. segments
-    // This converts relative paths to absolute and cleans up the path
-    cwd = path.resolve(cwd);
+    // Skip normalization for WSL UNC paths as path.resolve would break them
+    if (!cwd.startsWith("//wsl")) {
+      cwd = path.resolve(cwd);
+    }
 
     // Check if path exists and is a directory
     try {
