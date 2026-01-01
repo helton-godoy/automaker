@@ -9,6 +9,7 @@ import {
 import { useAppStore } from '@/store/app-store';
 import { useSetupStore } from '@/store/setup-store';
 import { getElectronAPI, isElectron } from '@/lib/electron';
+import { isMac } from '@/lib/utils';
 import {
   initApiKey,
   isElectronMode,
@@ -342,6 +343,13 @@ function RootLayoutContent() {
 
   return (
     <main className="flex h-screen overflow-hidden" data-testid="app-container">
+      {/* Full-width titlebar drag region for Electron window dragging */}
+      {isElectron() && (
+        <div
+          className={`fixed top-0 left-0 right-0 h-6 titlebar-drag-region z-40 pointer-events-none ${isMac ? 'pl-20' : ''}`}
+          aria-hidden="true"
+        />
+      )}
       <Sidebar />
       <div
         className="flex-1 flex flex-col overflow-hidden transition-all duration-300"
