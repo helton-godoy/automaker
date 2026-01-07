@@ -1989,6 +1989,18 @@ This helps parse your summary correctly in the output logs.`;
     const planningMode = options?.planningMode || 'skip';
     const previousContent = options?.previousContent;
 
+    // Validate vision support before processing images
+    const effectiveModel = model || 'claude-sonnet-4-20250514';
+    if (imagePaths && imagePaths.length > 0) {
+      const supportsVision = ProviderFactory.modelSupportsVision(effectiveModel);
+      if (!supportsVision) {
+        throw new Error(
+          `This model (${effectiveModel}) does not support image input. ` +
+            `Please switch to a model that supports vision (like Claude models), or remove the images and try again.`
+        );
+      }
+    }
+
     // Check if this planning mode can generate a spec/plan that needs approval
     // - spec and full always generate specs
     // - lite only generates approval-ready content when requirePlanApproval is true

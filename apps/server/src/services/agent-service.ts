@@ -174,6 +174,18 @@ export class AgentService {
       session.thinkingLevel = thinkingLevel;
     }
 
+    // Validate vision support before processing images
+    const effectiveModel = model || session.model;
+    if (imagePaths && imagePaths.length > 0 && effectiveModel) {
+      const supportsVision = ProviderFactory.modelSupportsVision(effectiveModel);
+      if (!supportsVision) {
+        throw new Error(
+          `This model (${effectiveModel}) does not support image input. ` +
+            `Please switch to a model that supports vision, or remove the images and try again.`
+        );
+      }
+    }
+
     // Read images and convert to base64
     const images: Message['images'] = [];
     if (imagePaths && imagePaths.length > 0) {

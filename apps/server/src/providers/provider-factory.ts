@@ -156,6 +156,32 @@ export class ProviderFactory {
   static getRegisteredProviderNames(): string[] {
     return Array.from(providerRegistry.keys());
   }
+
+  /**
+   * Check if a specific model supports vision/image input
+   *
+   * @param modelId Model identifier
+   * @returns Whether the model supports vision (defaults to true if model not found)
+   */
+  static modelSupportsVision(modelId: string): boolean {
+    const provider = this.getProviderForModel(modelId);
+    const models = provider.getAvailableModels();
+
+    // Find the model in the available models list
+    for (const model of models) {
+      if (
+        model.id === modelId ||
+        model.modelString === modelId ||
+        model.id.endsWith(`-${modelId}`) ||
+        model.modelString === modelId.replace(/^(claude|cursor|codex)-/, '')
+      ) {
+        return model.supportsVision ?? true;
+      }
+    }
+
+    // Default to true (Claude SDK supports vision by default)
+    return true;
+  }
 }
 
 // =============================================================================
