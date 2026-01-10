@@ -109,7 +109,6 @@ export { DEFAULT_PROMPT_CUSTOMIZATION } from './prompts.js';
 // Settings types and constants
 export type {
   ThemeMode,
-  KanbanCardDetailLevel,
   PlanningMode,
   ThinkingLevel,
   ModelProvider,

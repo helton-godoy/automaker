@@ -1858,7 +1858,6 @@ export class HttpApiClient implements ElectronAPI {
         theme: string;
         sidebarOpen: boolean;
         chatHistoryOpen: boolean;
-        kanbanCardDetailLevel: string;
         maxConcurrency: number;
         defaultSkipTests: boolean;
         enableDependencyBlocking: boolean;
@@ -1951,6 +1950,7 @@ export class HttpApiClient implements ElectronAPI {
           cardBorderOpacity: number;
           hideScrollbar: boolean;
         };
+        worktreePanelVisible?: boolean;
         lastSelectedSessionId?: string;
       };
       error?: string;

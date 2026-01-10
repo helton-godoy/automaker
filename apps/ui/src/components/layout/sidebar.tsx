@@ -17,7 +17,6 @@ import { CreateSpecDialog } from '@/components/views/spec-view/dialogs';
 import {
   CollapseToggleButton,
   SidebarHeader,
-  ProjectActions,
   SidebarNavigation,
   ProjectSelectorWithOptions,
   SidebarFooter,
@@ -275,17 +274,6 @@ export function Sidebar() {
 
       <div className="flex-1 flex flex-col overflow-hidden">
         <SidebarHeader sidebarOpen={sidebarOpen} navigate={navigate} />
-
-        {/* Project Actions - Moved above project selector */}
-        {sidebarOpen && (
-          <ProjectActions
-            setShowNewProjectModal={setShowNewProjectModal}
-            handleOpenFolder={handleOpenFolder}
-            setShowTrashDialog={setShowTrashDialog}
-            trashedProjects={trashedProjects}
-            shortcuts={{ openProject: shortcuts.openProject }}
-          />
-        )}
 
         <ProjectSelectorWithOptions
           sidebarOpen={sidebarOpen}

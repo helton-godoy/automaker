@@ -52,6 +52,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DependencyTreeDialog } from './dependency-tree-dialog';
 import { isClaudeModel, supportsReasoningEffort } from '@automaker/types';
 
@@ -516,23 +517,44 @@ export function EditFeatureDialog({
               />
             </div>
 
-            <div
-              className={cn(
-                'grid gap-3',
-                modelSupportsPlanningMode ? 'grid-cols-2' : 'grid-cols-1'
-              )}
-            >
-              {modelSupportsPlanningMode && (
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Planning</Label>
+            <div className="grid gap-3 grid-cols-2">
+              <div className="space-y-1.5">
+                <Label
+                  className={cn(
+                    'text-xs text-muted-foreground',
+                    !modelSupportsPlanningMode && 'opacity-50'
+                  )}
+                >
+                  Planning
+                </Label>
+                {modelSupportsPlanningMode ? (
                   <PlanningModeSelect
                     mode={planningMode}
                     onModeChange={setPlanningMode}
                     testIdPrefix="edit-feature-planning"
                     compact
                   />
-                </div>
-              )}
+                ) : (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div>
+                          <PlanningModeSelect
+                            mode="skip"
+                            onModeChange={() => {}}
+                            testIdPrefix="edit-feature-planning"
+                            compact
+                            disabled
+                          />
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Planning modes are only available for Claude Provider</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+              </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Options</Label>
                 <div className="flex flex-col gap-2 pt-1">
@@ -552,28 +574,32 @@ export function EditFeatureDialog({
                       Run tests
                     </Label>
                   </div>
-                  {modelSupportsPlanningMode && (
-                    <div className="flex items-center gap-2">
-                      <Checkbox
-                        id="edit-feature-require-approval"
-                        checked={requirePlanApproval}
-                        onCheckedChange={(checked) => setRequirePlanApproval(!!checked)}
-                        disabled={planningMode === 'skip' || planningMode === 'lite'}
-                        data-testid="edit-feature-require-approval-checkbox"
-                      />
-                      <Label
-                        htmlFor="edit-feature-require-approval"
-                        className={cn(
-                          'text-xs font-normal',
-                          planningMode === 'skip' || planningMode === 'lite'
-                            ? 'cursor-not-allowed text-muted-foreground'
-                            : 'cursor-pointer'
-                        )}
-                      >
-                        Require approval
-                      </Label>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="edit-feature-require-approval"
+                      checked={requirePlanApproval}
+                      onCheckedChange={(checked) => setRequirePlanApproval(!!checked)}
+                      disabled={
+                        !modelSupportsPlanningMode ||
+                        planningMode === 'skip' ||
+                        planningMode === 'lite'
+                      }
+                      data-testid="edit-feature-require-approval-checkbox"
+                    />
+                    <Label
+                      htmlFor="edit-feature-require-approval"
+                      className={cn(
+                        'text-xs font-normal',
+                        !modelSupportsPlanningMode ||
+                          planningMode === 'skip' ||
+                          planningMode === 'lite'
+                          ? 'cursor-not-allowed text-muted-foreground'
+                          : 'cursor-pointer'
+                      )}
+                    >
+                      Require approval
+                    </Label>
+                  </div>
                 </div>
               </div>
             </div>

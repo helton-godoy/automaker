@@ -7,7 +7,24 @@ import {
   useSensors,
   rectIntersection,
   pointerWithin,
+  type PointerEvent as DndPointerEvent,
 } from '@dnd-kit/core';
+
+// Custom pointer sensor that ignores drag events from within dialogs
+class DialogAwarePointerSensor extends PointerSensor {
+  static activators = [
+    {
+      eventName: 'onPointerDown' as const,
+      handler: ({ nativeEvent: event }: { nativeEvent: DndPointerEvent }) => {
+        // Don't start drag if the event originated from inside a dialog
+        if ((event.target as Element)?.closest?.('[role="dialog"]')) {
+          return false;
+        }
+        return true;
+      },
+    },
+  ];
+}
 import { useAppStore, Feature } from '@/store/app-store';
 import { getElectronAPI } from '@/lib/electron';
 import { getHttpApiClient } from '@/lib/http-api-client';
@@ -73,8 +90,6 @@ export function BoardView() {
     maxConcurrency,
     setMaxConcurrency,
     defaultSkipTests,
-    kanbanCardDetailLevel,
-    setKanbanCardDetailLevel,
     boardViewMode,
     setBoardViewMode,
     specCreatingForProject,
@@ -95,6 +110,8 @@ export function BoardView() {
   } = useAppStore();
   // Subscribe to pipelineConfigByProject to trigger re-renders when it changes
   const pipelineConfigByProject = useAppStore((state) => state.pipelineConfigByProject);
+  // Subscribe to worktreePanelVisibleByProject to trigger re-renders when it changes
+  const worktreePanelVisibleByProject = useAppStore((state) => state.worktreePanelVisibleByProject);
   const shortcuts = useKeyboardShortcutsConfig();
   const {
     features: hookFeatures,
@@ -246,7 +263,7 @@ export function BoardView() {
   }, []);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
+    useSensor(DialogAwarePointerSensor, {
       activationConstraint: {
         distance: 8,
       },
@@ -1139,6 +1156,7 @@ export function BoardView() {
       {/* Header */}
       <BoardHeader
         projectName={currentProject.name}
+        projectPath={currentProject.path}
         maxConcurrency={maxConcurrency}
         runningAgentsCount={runningAutoTasks.length}
         onConcurrencyChange={setMaxConcurrency}
@@ -1150,47 +1168,43 @@ export function BoardView() {
             autoMode.stop();
           }
         }}
-        onAddFeature={() => setShowAddDialog(true)}
         onOpenPlanDialog={() => setShowPlanDialog(true)}
-        addFeatureShortcut={{
-          key: shortcuts.addFeature,
-          action: () => setShowAddDialog(true),
-          description: 'Add new feature',
-        }}
         isMounted={isMounted}
       />
 
-      {/* Worktree Panel */}
-      <WorktreePanel
-        refreshTrigger={worktreeRefreshKey}
-        projectPath={currentProject.path}
-        onCreateWorktree={() => setShowCreateWorktreeDialog(true)}
-        onDeleteWorktree={(worktree) => {
-          setSelectedWorktreeForAction(worktree);
-          setShowDeleteWorktreeDialog(true);
-        }}
-        onCommit={(worktree) => {
-          setSelectedWorktreeForAction(worktree);
-          setShowCommitWorktreeDialog(true);
-        }}
-        onCreatePR={(worktree) => {
-          setSelectedWorktreeForAction(worktree);
-          setShowCreatePRDialog(true);
-        }}
-        onCreateBranch={(worktree) => {
-          setSelectedWorktreeForAction(worktree);
-          setShowCreateBranchDialog(true);
-        }}
-        onAddressPRComments={handleAddressPRComments}
-        onResolveConflicts={handleResolveConflicts}
-        onRemovedWorktrees={handleRemovedWorktrees}
-        runningFeatureIds={runningAutoTasks}
-        branchCardCounts={branchCardCounts}
-        features={hookFeatures.map((f) => ({
-          id: f.id,
-          branchName: f.branchName,
-        }))}
-      />
+      {/* Worktree Panel - conditionally rendered based on visibility setting */}
+      {(worktreePanelVisibleByProject[currentProject.path] ?? true) && (
+        <WorktreePanel
+          refreshTrigger={worktreeRefreshKey}
+          projectPath={currentProject.path}
+          onCreateWorktree={() => setShowCreateWorktreeDialog(true)}
+          onDeleteWorktree={(worktree) => {
+            setSelectedWorktreeForAction(worktree);
+            setShowDeleteWorktreeDialog(true);
+          }}
+          onCommit={(worktree) => {
+            setSelectedWorktreeForAction(worktree);
+            setShowCommitWorktreeDialog(true);
+          }}
+          onCreatePR={(worktree) => {
+            setSelectedWorktreeForAction(worktree);
+            setShowCreatePRDialog(true);
+          }}
+          onCreateBranch={(worktree) => {
+            setSelectedWorktreeForAction(worktree);
+            setShowCreateBranchDialog(true);
+          }}
+          onAddressPRComments={handleAddressPRComments}
+          onResolveConflicts={handleResolveConflicts}
+          onRemovedWorktrees={handleRemovedWorktrees}
+          runningFeatureIds={runningAutoTasks}
+          branchCardCounts={branchCardCounts}
+          features={hookFeatures.map((f) => ({
+            id: f.id,
+            branchName: f.branchName,
+          }))}
+        />
+      )}
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -1210,8 +1224,6 @@ export function BoardView() {
             onShowBoardBackground={() => setShowBoardBackgroundModal(true)}
             onShowCompletedModal={() => setShowCompletedModal(true)}
             completedCount={completedFeatures.length}
-            kanbanCardDetailLevel={kanbanCardDetailLevel}
-            onDetailLevelChange={setKanbanCardDetailLevel}
             boardViewMode={boardViewMode}
             onBoardViewModeChange={setBoardViewMode}
           />
@@ -1247,6 +1259,7 @@ export function BoardView() {
             featuresWithContext={featuresWithContext}
             runningAutoTasks={runningAutoTasks}
             onArchiveAllVerified={() => setShowArchiveAllVerifiedDialog(true)}
+            onAddFeature={() => setShowAddDialog(true)}
             pipelineConfig={
               currentProject?.path ? pipelineConfigByProject[currentProject.path] || null : null
             }

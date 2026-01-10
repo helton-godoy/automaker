@@ -139,7 +139,6 @@ export function parseLocalStorageSettings(): Partial<GlobalSettings> | null {
       theme: state.theme as GlobalSettings['theme'],
       sidebarOpen: state.sidebarOpen as boolean,
       chatHistoryOpen: state.chatHistoryOpen as boolean,
-      kanbanCardDetailLevel: state.kanbanCardDetailLevel as GlobalSettings['kanbanCardDetailLevel'],
       maxConcurrency: state.maxConcurrency as number,
       defaultSkipTests: state.defaultSkipTests as boolean,
       enableDependencyBlocking: state.enableDependencyBlocking as boolean,
@@ -504,6 +503,7 @@ export function hydrateStoreFromSettings(settings: GlobalSettings): void {
     path: ref.path,
     lastOpened: ref.lastOpened,
     theme: ref.theme,
+    isFavorite: ref.isFavorite,
     features: [], // Features are loaded separately when project is opened
   }));
 
@@ -525,7 +525,6 @@ export function hydrateStoreFromSettings(settings: GlobalSettings): void {
     theme: settings.theme as unknown as import('@/store/app-store').ThemeMode,
     sidebarOpen: settings.sidebarOpen ?? true,
     chatHistoryOpen: settings.chatHistoryOpen ?? false,
-    kanbanCardDetailLevel: settings.kanbanCardDetailLevel ?? 'standard',
     maxConcurrency: settings.maxConcurrency ?? 3,
     defaultSkipTests: settings.defaultSkipTests ?? true,
     enableDependencyBlocking: settings.enableDependencyBlocking ?? true,
@@ -581,7 +580,6 @@ function buildSettingsUpdateFromStore(): Record<string, unknown> {
     theme: state.theme,
     sidebarOpen: state.sidebarOpen,
     chatHistoryOpen: state.chatHistoryOpen,
-    kanbanCardDetailLevel: state.kanbanCardDetailLevel,
     maxConcurrency: state.maxConcurrency,
     defaultSkipTests: state.defaultSkipTests,
     enableDependencyBlocking: state.enableDependencyBlocking,

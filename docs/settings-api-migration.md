@@ -96,7 +96,6 @@ const SETTINGS_FIELDS_TO_SYNC = [
   'theme',
   'sidebarOpen',
   'chatHistoryOpen',
-  'kanbanCardDetailLevel',
   'maxConcurrency',
   'defaultSkipTests',
   'enableDependencyBlocking',

@@ -41,7 +41,6 @@ const E2E_SETTINGS = {
   theme: 'dark',
   sidebarOpen: true,
   chatHistoryOpen: false,
-  kanbanCardDetailLevel: 'standard',
   maxConcurrency: 3,
   defaultSkipTests: true,
   enableDependencyBlocking: true,

@@ -15,8 +15,9 @@ import { modelSupportsThinking } from '@/lib/utils';
 import { Feature, ModelAlias, ThinkingLevel, PlanningMode } from '@/store/app-store';
 import { TestingTabContent, PrioritySelect, PlanningModeSelect } from '../shared';
 import { PhaseModelSelector } from '@/components/views/settings-view/model-defaults/phase-model-selector';
-import { isCursorModel, type PhaseModelEntry } from '@automaker/types';
+import { isCursorModel, isClaudeModel, type PhaseModelEntry } from '@automaker/types';
 import { cn } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface MassEditDialogProps {
   open: boolean;
@@ -167,6 +168,7 @@ export function MassEditDialog({ open, onClose, selectedFeatures, onApply }: Mas
   const hasAnyApply = Object.values(applyState).some(Boolean);
   const isCurrentModelCursor = isCursorModel(model);
   const modelAllowsThinking = !isCurrentModelCursor && modelSupportsThinking(model);
+  const modelSupportsPlanningMode = isClaudeModel(model);
 
   return (
     <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
@@ -205,30 +207,64 @@ export function MassEditDialog({ open, onClose, selectedFeatures, onApply }: Mas
           <div className="border-t border-border" />
 
           {/* Planning Mode */}
-          <FieldWrapper
-            label="Planning Mode"
-            isMixed={mixedValues.planningMode || mixedValues.requirePlanApproval}
-            willApply={applyState.planningMode || applyState.requirePlanApproval}
-            onApplyChange={(apply) =>
-              setApplyState((prev) => ({
-                ...prev,
-                planningMode: apply,
-                requirePlanApproval: apply,
-              }))
-            }
-          >
-            <PlanningModeSelect
-              mode={planningMode}
-              onModeChange={(newMode) => {
-                setPlanningMode(newMode);
-                // Auto-suggest approval based on mode, but user can override
-                setRequirePlanApproval(newMode === 'spec' || newMode === 'full');
-              }}
-              requireApproval={requirePlanApproval}
-              onRequireApprovalChange={setRequirePlanApproval}
-              testIdPrefix="mass-edit-planning"
-            />
-          </FieldWrapper>
+          {modelSupportsPlanningMode ? (
+            <FieldWrapper
+              label="Planning Mode"
+              isMixed={mixedValues.planningMode || mixedValues.requirePlanApproval}
+              willApply={applyState.planningMode || applyState.requirePlanApproval}
+              onApplyChange={(apply) =>
+                setApplyState((prev) => ({
+                  ...prev,
+                  planningMode: apply,
+                  requirePlanApproval: apply,
+                }))
+              }
+            >
+              <PlanningModeSelect
+                mode={planningMode}
+                onModeChange={(newMode) => {
+                  setPlanningMode(newMode);
+                  // Auto-suggest approval based on mode, but user can override
+                  setRequirePlanApproval(newMode === 'spec' || newMode === 'full');
+                }}
+                requireApproval={requirePlanApproval}
+                onRequireApprovalChange={setRequirePlanApproval}
+                testIdPrefix="mass-edit-planning"
+              />
+            </FieldWrapper>
+          ) : (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div
+                    className={cn(
+                      'p-3 rounded-lg border transition-colors border-border bg-muted/20 opacity-50 cursor-not-allowed'
+                    )}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Checkbox checked={false} disabled className="opacity-50" />
+                        <Label className="text-sm font-medium text-muted-foreground">
+                          Planning Mode
+                        </Label>
+                      </div>
+                    </div>
+                    <div className="opacity-50 pointer-events-none">
+                      <PlanningModeSelect
+                        mode="skip"
+                        onModeChange={() => {}}
+                        testIdPrefix="mass-edit-planning"
+                        disabled
+                      />
+                    </div>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Planning modes are only available for Claude Provider</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
 
           {/* Priority */}
           <FieldWrapper

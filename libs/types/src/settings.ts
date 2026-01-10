@@ -65,9 +65,6 @@ export type ThemeMode =
   | 'nordlight'
   | 'blossom';
 
-/** KanbanCardDetailLevel - Controls how much information is displayed on kanban cards */
-export type KanbanCardDetailLevel = 'minimal' | 'standard' | 'detailed';
-
 /** PlanningMode - Planning levels for feature generation workflows */
 export type PlanningMode = 'skip' | 'lite' | 'spec' | 'full';
 
@@ -294,6 +291,8 @@ export interface ProjectRef {
   lastOpened?: string;
   /** Project-specific theme override (or undefined to use global) */
   theme?: string;
+  /** Whether project is pinned to favorites on dashboard */
+  isFavorite?: boolean;
 }
 
 /**
@@ -360,8 +359,6 @@ export interface GlobalSettings {
   sidebarOpen: boolean;
   /** Whether chat history panel is open */
   chatHistoryOpen: boolean;
-  /** How much detail to show on kanban cards */
-  kanbanCardDetailLevel: KanbanCardDetailLevel;
 
   // Feature Generation Defaults
   /** Max features to generate concurrently */
@@ -595,6 +592,10 @@ export interface ProjectSettings {
   /** Project-specific board background settings */
   boardBackground?: BoardBackgroundSettings;
 
+  // UI Visibility
+  /** Whether the worktree panel row is visible (default: true) */
+  worktreePanelVisible?: boolean;
+
   // Session Tracking
   /** Last chat session selected in this project */
   lastSelectedSessionId?: string;
@@ -676,7 +677,6 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   theme: 'dark',
   sidebarOpen: true,
   chatHistoryOpen: false,
-  kanbanCardDetailLevel: 'standard',
   maxConcurrency: 3,
   defaultSkipTests: true,
   enableDependencyBlocking: true,

@@ -7,7 +7,6 @@
 
 export type {
   ThemeMode,
-  KanbanCardDetailLevel,
   ModelAlias,
   PlanningMode,
   ThinkingLevel,

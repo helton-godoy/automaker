@@ -3003,6 +3003,7 @@ export interface Project {
   path: string;
   lastOpened?: string;
   theme?: string; // Per-project theme override (uses ThemeMode from app-store)
+  isFavorite?: boolean; // Pin project to top of dashboard
 }
 
 export interface TrashedProject extends Project {

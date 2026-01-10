@@ -600,8 +600,6 @@ export class SettingsService {
         theme: (appState.theme as GlobalSettings['theme']) || 'dark',
         sidebarOpen: appState.sidebarOpen !== undefined ? (appState.sidebarOpen as boolean) : true,
         chatHistoryOpen: (appState.chatHistoryOpen as boolean) || false,
-        kanbanCardDetailLevel:
-          (appState.kanbanCardDetailLevel as GlobalSettings['kanbanCardDetailLevel']) || 'standard',
         maxConcurrency: (appState.maxConcurrency as number) || 3,
         defaultSkipTests:
           appState.defaultSkipTests !== undefined ? (appState.defaultSkipTests as boolean) : true,

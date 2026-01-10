@@ -84,6 +84,7 @@ function RootLayoutContent() {
   const isSetupRoute = location.pathname === '/setup';
   const isLoginRoute = location.pathname === '/login';
   const isLoggedOutRoute = location.pathname === '/logged-out';
+  const isDashboardRoute = location.pathname === '/dashboard';
 
   // Sandbox environment check state
   type SandboxStatus = 'pending' | 'containerized' | 'needs-confirmation' | 'denied' | 'confirmed';
@@ -389,9 +390,9 @@ function RootLayoutContent() {
       return;
     }
 
-    // Setup complete but user is still on /setup -> go to app
+    // Setup complete but user is still on /setup -> go to dashboard
     if (setupComplete && location.pathname === '/setup') {
-      navigate({ to: '/' });
+      navigate({ to: '/dashboard' });
     }
   }, [authChecked, isAuthenticated, setupComplete, location.pathname, navigate]);
 
@@ -425,10 +426,16 @@ function RootLayoutContent() {
     testConnection();
   }, [setIpcConnected]);
 
-  // Restore to board view if a project was previously open
+  // Redirect from welcome page based on project state
   useEffect(() => {
-    if (isMounted && currentProject && location.pathname === '/') {
-      navigate({ to: '/board' });
+    if (isMounted && location.pathname === '/') {
+      if (currentProject) {
+        // Project is selected, go to board
+        navigate({ to: '/board' });
+      } else {
+        // No project selected, go to dashboard
+        navigate({ to: '/dashboard' });
+      }
     }
   }, [isMounted, currentProject, location.pathname, navigate]);
 
@@ -511,6 +518,23 @@ function RootLayoutContent() {
       <main className="h-screen overflow-hidden" data-testid="app-container">
         <Outlet />
       </main>
+    );
+  }
+
+  // Show dashboard page (full screen, no sidebar) - authenticated only
+  if (isDashboardRoute) {
+    return (
+      <>
+        <main className="h-screen overflow-hidden" data-testid="app-container">
+          <Outlet />
+          <Toaster richColors position="bottom-right" />
+        </main>
+        <SandboxRiskDialog
+          open={showSandboxDialog}
+          onConfirm={handleSandboxConfirm}
+          onDeny={handleSandboxDeny}
+        />
+      </>
     );
   }
 
