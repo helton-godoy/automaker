@@ -268,11 +268,12 @@ export function createCreatePRHandler() {
             prAlreadyExisted = true;
 
             // Store the existing PR info in metadata
+            // GitHub CLI returns uppercase states: OPEN, MERGED, CLOSED
             await updateWorktreePRInfo(effectiveProjectPath, branchName, {
               number: existingPr.number,
               url: existingPr.url,
               title: existingPr.title || title,
-              state: existingPr.state || 'open',
+              state: existingPr.state || 'OPEN',
               createdAt: new Date().toISOString(),
             });
             logger.debug(
@@ -319,11 +320,12 @@ export function createCreatePRHandler() {
 
               if (prNumber) {
                 try {
+                  // Note: GitHub doesn't have a 'DRAFT' state - drafts still show as 'OPEN'
                   await updateWorktreePRInfo(effectiveProjectPath, branchName, {
                     number: prNumber,
                     url: prUrl,
                     title,
-                    state: draft ? 'draft' : 'open',
+                    state: 'OPEN',
                     createdAt: new Date().toISOString(),
                   });
                   logger.debug(`Stored PR info for branch ${branchName}: PR #${prNumber}`);
@@ -352,11 +354,12 @@ export function createCreatePRHandler() {
                   prNumber = existingPr.number;
                   prAlreadyExisted = true;
 
+                  // GitHub CLI returns uppercase states: OPEN, MERGED, CLOSED
                   await updateWorktreePRInfo(effectiveProjectPath, branchName, {
                     number: existingPr.number,
                     url: existingPr.url,
                     title: existingPr.title || title,
-                    state: existingPr.state || 'open',
+                    state: existingPr.state || 'OPEN',
                     createdAt: new Date().toISOString(),
                   });
                   logger.debug(`Fetched and stored existing PR: #${existingPr.number}`);

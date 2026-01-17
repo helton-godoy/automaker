@@ -1,8 +1,12 @@
+/** GitHub PR states as returned by the GitHub API */
+export type PRState = 'OPEN' | 'MERGED' | 'CLOSED';
+
 export interface WorktreePRInfo {
   number: number;
   url: string;
   title: string;
-  state: string;
+  /** PR state: OPEN, MERGED, or CLOSED */
+  state: PRState;
   createdAt: string;
 }
 
@@ -43,7 +47,8 @@ export interface PRInfo {
   number: number;
   title: string;
   url: string;
-  state: string;
+  /** PR state: OPEN, MERGED, or CLOSED */
+  state: PRState;
   author: string;
   body: string;
   comments: Array<{

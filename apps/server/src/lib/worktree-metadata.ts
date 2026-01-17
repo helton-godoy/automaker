@@ -9,11 +9,15 @@ import * as path from 'path';
 /** Maximum length for sanitized branch names in filesystem paths */
 const MAX_SANITIZED_BRANCH_PATH_LENGTH = 200;
 
+/** GitHub PR states as returned by the GitHub API */
+export type PRState = 'OPEN' | 'MERGED' | 'CLOSED';
+
 export interface WorktreePRInfo {
   number: number;
   url: string;
   title: string;
-  state: string;
+  /** PR state: OPEN, MERGED, or CLOSED */
+  state: PRState;
   createdAt: string;
 }
 
