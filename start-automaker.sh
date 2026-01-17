@@ -37,11 +37,11 @@ DEFAULT_SERVER_PORT=3008
 WEB_PORT=$DEFAULT_WEB_PORT
 SERVER_PORT=$DEFAULT_SERVER_PORT
 
-# Extract VERSION from package.json (using node for reliable JSON parsing)
+# Extract VERSION from apps/ui/package.json (the actual app version, not monorepo version)
 if command -v node &> /dev/null; then
-    VERSION="v$(node -p "require('$SCRIPT_DIR/package.json').version" 2>/dev/null || echo "0.0.0")"
+    VERSION="v$(node -p "require('$SCRIPT_DIR/apps/ui/package.json').version" 2>/dev/null || echo "0.11.0")"
 else
-    VERSION=$(grep '"version"' "$SCRIPT_DIR/package.json" | head -1 | sed 's/.*"version"[^"]*"\([^"]*\)".*/v\1/')
+    VERSION=$(grep '"version"' "$SCRIPT_DIR/apps/ui/package.json" 2>/dev/null | head -1 | sed 's/.*"version"[^"]*"\([^"]*\)".*/v\1/' || echo "v0.11.0")
 fi
 
 # ANSI Color codes (256-color palette)
