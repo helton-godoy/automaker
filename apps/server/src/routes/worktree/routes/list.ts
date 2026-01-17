@@ -161,7 +161,7 @@ async function getGitHubRemoteStatus(projectPath: string): Promise<GitHubRemoteS
   const status = await checkGitHubRemote(projectPath);
   githubRemoteCache.set(projectPath, {
     status,
-    checkedAt: now,
+    checkedAt: Date.now(),
   });
 
   return status;
