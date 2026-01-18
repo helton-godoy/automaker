@@ -1627,16 +1627,18 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
       const updatedProjects = projects.map((p) => (p.id === existingProject.id ? project : p));
       set({ projects: updatedProjects });
     } else {
-      // Create new project - check for trashed project with same path first (preserves theme if deleted/recreated)
-      // Then fall back to provided theme, then current project theme, then global theme
+      // Create new project - only set theme if explicitly provided or recovering from trash
+      // Otherwise leave undefined so project uses global theme ("Use Global Theme" checked)
       const trashedProject = trashedProjects.find((p) => p.path === path);
-      const effectiveTheme = theme || trashedProject?.theme || currentProject?.theme || globalTheme;
+      const projectTheme =
+        theme !== undefined ? theme : (trashedProject?.theme as ThemeMode | undefined);
+
       project = {
         id: `project-${Date.now()}`,
         name,
         path,
         lastOpened: new Date().toISOString(),
-        theme: effectiveTheme,
+        theme: projectTheme, // May be undefined - intentional!
       };
       // Add the new project to the store
       set({

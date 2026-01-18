@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { useAppStore, type ThemeMode } from '@/store/app-store';
+import { useAppStore } from '@/store/app-store';
 import { getElectronAPI } from '@/lib/electron';
 import { initializeProject } from '@/lib/project-init';
 import {
@@ -38,15 +38,7 @@ import { useNavigate } from '@tanstack/react-router';
 const logger = createLogger('WelcomeView');
 
 export function WelcomeView() {
-  const {
-    projects,
-    trashedProjects,
-    currentProject,
-    upsertAndSetCurrentProject,
-    addProject,
-    setCurrentProject,
-    theme: globalTheme,
-  } = useAppStore();
+  const { projects, upsertAndSetCurrentProject, addProject, setCurrentProject } = useAppStore();
   const navigate = useNavigate();
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -109,13 +101,8 @@ export function WelcomeView() {
         }
 
         // Upsert project and set as current (handles both create and update cases)
-        // Theme preservation is handled by the store action
-        const trashedProject = trashedProjects.find((p) => p.path === path);
-        const effectiveTheme =
-          (trashedProject?.theme as ThemeMode | undefined) ||
-          (currentProject?.theme as ThemeMode | undefined) ||
-          globalTheme;
-        upsertAndSetCurrentProject(path, name, effectiveTheme);
+        // Theme handling (trashed project recovery or undefined for global) is done by the store
+        upsertAndSetCurrentProject(path, name);
 
         // Show initialization dialog if files were created
         if (initResult.createdFiles && initResult.createdFiles.length > 0) {
@@ -150,14 +137,7 @@ export function WelcomeView() {
         setIsOpening(false);
       }
     },
-    [
-      trashedProjects,
-      currentProject,
-      globalTheme,
-      upsertAndSetCurrentProject,
-      analyzeProject,
-      navigate,
-    ]
+    [upsertAndSetCurrentProject, analyzeProject, navigate]
   );
 
   const handleOpenProject = useCallback(async () => {
