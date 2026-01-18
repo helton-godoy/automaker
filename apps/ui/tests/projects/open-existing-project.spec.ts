@@ -156,9 +156,11 @@ test.describe('Open Project', () => {
     }
 
     // Wait for a project to be set as current and visible on the page
-    // The project name appears in the project switcher button
+    // The project name appears in the project switcher button with title attribute
+    // (The button uses data-testid with projectId, not projectName)
     if (targetProjectName) {
-      await expect(page.getByTestId(`project-switcher-project-${targetProjectName}`)).toBeVisible({
+      const projectSwitcherButton = page.locator(`button[title="${targetProjectName}"]`).first();
+      await expect(projectSwitcherButton).toBeVisible({
         timeout: 15000,
       });
     }

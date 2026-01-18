@@ -111,6 +111,14 @@ export function resetMigrationState(): void {
 
 /**
  * Parse localStorage data into settings object
+ *
+ * Checks for settings in multiple locations:
+ * 1. automaker-settings-cache: Fresh server settings cached from last fetch
+ * 2. automaker-storage: Zustand-persisted app store state (legacy)
+ * 3. automaker-setup: Setup wizard state (legacy)
+ * 4. Standalone keys: worktree-panel-collapsed, file-browser-recent-folders, etc.
+ *
+ * @returns Merged settings object or null if no settings found
  */
 export function parseLocalStorageSettings(): Partial<GlobalSettings> | null {
   try {
@@ -203,7 +211,14 @@ export function parseLocalStorageSettings(): Partial<GlobalSettings> | null {
 
 /**
  * Check if localStorage has more complete data than server
- * Returns true if localStorage has projects but server doesn't
+ *
+ * Compares the completeness of data to determine if a migration is needed.
+ * Returns true if localStorage has projects but server doesn't, indicating
+ * the localStorage data should be merged with server settings.
+ *
+ * @param localSettings Settings loaded from localStorage
+ * @param serverSettings Settings loaded from server
+ * @returns true if localStorage has more data that should be preserved
  */
 export function localStorageHasMoreData(
   localSettings: Partial<GlobalSettings> | null,
@@ -226,7 +241,15 @@ export function localStorageHasMoreData(
 
 /**
  * Merge localStorage settings with server settings
- * Prefers server data, but uses localStorage for missing arrays/objects
+ *
+ * Intelligently combines settings from both sources:
+ * - Prefers server data as the base
+ * - Uses localStorage values when server has empty arrays/objects
+ * - Specific handling for: projects, trashedProjects, mcpServers, recentFolders, etc.
+ *
+ * @param serverSettings Settings from server API (base)
+ * @param localSettings Settings from localStorage (fallback)
+ * @returns Merged GlobalSettings object ready to hydrate the store
  */
 export function mergeSettings(
   serverSettings: GlobalSettings,
@@ -308,8 +331,14 @@ export function mergeSettings(
  * This is the core migration logic extracted for use outside of React hooks.
  * Call this from __root.tsx during app initialization.
  *
- * @param serverSettings - Settings fetched from the server API
- * @returns Promise resolving to the final settings to use (merged if migration needed)
+ * Flow:
+ * 1. If server has localStorageMigrated flag, skip migration (already done)
+ * 2. Check if localStorage has more data than server
+ * 3. If yes, merge them and sync merged state back to server
+ * 4. Set localStorageMigrated flag to prevent re-migration
+ *
+ * @param serverSettings Settings fetched from the server API
+ * @returns Promise resolving to {settings, migrated} - final settings and whether migration occurred
  */
 export async function performSettingsMigration(
   serverSettings: GlobalSettings

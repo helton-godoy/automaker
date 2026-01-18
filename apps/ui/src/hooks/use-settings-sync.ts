@@ -81,7 +81,15 @@ const SETUP_FIELDS_TO_SYNC = ['isFirstRun', 'setupComplete', 'skipClaudeSetup'] 
 
 /**
  * Helper to extract a settings field value from app state
- * Handles special cases for nested/mapped fields
+ *
+ * Handles special cases where store fields don't map directly to settings:
+ * - currentProjectId: Extract from currentProject?.id
+ * - terminalFontFamily: Extract from terminalState.fontFamily
+ * - Other fields: Direct access
+ *
+ * @param field The settings field to extract
+ * @param appState Current app store state
+ * @returns The value of the field in the app state
  */
 function getSettingsFieldValue(
   field: (typeof SETTINGS_FIELDS_TO_SYNC)[number],
@@ -98,6 +106,16 @@ function getSettingsFieldValue(
 
 /**
  * Helper to check if a settings field changed between states
+ *
+ * Compares field values between old and new state, handling special cases:
+ * - currentProjectId: Compare currentProject?.id values
+ * - terminalFontFamily: Compare terminalState.fontFamily values
+ * - Other fields: Direct reference equality check
+ *
+ * @param field The settings field to check
+ * @param newState New app store state
+ * @param prevState Previous app store state
+ * @returns true if the field value changed between states
  */
 function hasSettingsFieldChanged(
   field: (typeof SETTINGS_FIELDS_TO_SYNC)[number],
