@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { GitBranch, Plus, RefreshCw } from 'lucide-react';
 import { Spinner } from '@/components/ui/spinner';
-import { cn, pathsEqual } from '@/lib/utils';
+import { pathsEqual } from '@/lib/utils';
 import { toast } from 'sonner';
 import { getHttpApiClient } from '@/lib/http-api-client';
 import { useIsMobile } from '@/hooks/use-media-query';
@@ -21,6 +21,7 @@ import {
   WorktreeActionsDropdown,
   BranchSwitchDropdown,
 } from './components';
+import { useAppStore } from '@/store/app-store';
 
 export function WorktreePanel({
   projectPath,
@@ -50,7 +51,6 @@ export function WorktreePanel({
 
   const {
     isStartingDevServer,
-    getWorktreeKey,
     isDevServerRunning,
     getDevServerInfo,
     handleStartDevServer,
@@ -91,6 +91,67 @@ export function WorktreePanel({
     runningFeatureIds,
     features,
   });
+
+  // Auto-mode state management using the store
+  // Use separate selectors to avoid creating new object references on each render
+  const autoModeByWorktree = useAppStore((state) => state.autoModeByWorktree);
+  const currentProject = useAppStore((state) => state.currentProject);
+
+  // Helper to generate worktree key for auto-mode (inlined to avoid selector issues)
+  const getAutoModeWorktreeKey = useCallback(
+    (projectId: string, branchName: string | null): string => {
+      return `${projectId}::${branchName ?? '__main__'}`;
+    },
+    []
+  );
+
+  // Helper to check if auto-mode is running for a specific worktree
+  const isAutoModeRunningForWorktree = useCallback(
+    (worktree: WorktreeInfo): boolean => {
+      if (!currentProject) return false;
+      const branchName = worktree.isMain ? null : worktree.branch;
+      const key = getAutoModeWorktreeKey(currentProject.id, branchName);
+      return autoModeByWorktree[key]?.isRunning ?? false;
+    },
+    [currentProject, autoModeByWorktree, getAutoModeWorktreeKey]
+  );
+
+  // Handler to toggle auto-mode for a worktree
+  const handleToggleAutoMode = useCallback(
+    async (worktree: WorktreeInfo) => {
+      if (!currentProject) return;
+
+      // Import the useAutoMode to get start/stop functions
+      // Since useAutoMode is a hook, we'll use the API client directly
+      const api = getHttpApiClient();
+      const branchName = worktree.isMain ? null : worktree.branch;
+      const isRunning = isAutoModeRunningForWorktree(worktree);
+
+      try {
+        if (isRunning) {
+          const result = await api.autoMode.stop(projectPath, branchName);
+          if (result.success) {
+            const desc = branchName ? `worktree ${branchName}` : 'main branch';
+            toast.success(`Auto Mode stopped for ${desc}`);
+          } else {
+            toast.error(result.error || 'Failed to stop Auto Mode');
+          }
+        } else {
+          const result = await api.autoMode.start(projectPath, branchName);
+          if (result.success) {
+            const desc = branchName ? `worktree ${branchName}` : 'main branch';
+            toast.success(`Auto Mode started for ${desc}`);
+          } else {
+            toast.error(result.error || 'Failed to start Auto Mode');
+          }
+        }
+      } catch (error) {
+        toast.error('Error toggling Auto Mode');
+        console.error('Auto mode toggle error:', error);
+      }
+    },
+    [currentProject, projectPath, isAutoModeRunningForWorktree]
+  );
 
   // Track whether init script exists for the project
   const [hasInitScript, setHasInitScript] = useState(false);
@@ -244,6 +305,7 @@ export function WorktreePanel({
             isDevServerRunning={isDevServerRunning(selectedWorktree)}
             devServerInfo={getDevServerInfo(selectedWorktree)}
             gitRepoStatus={gitRepoStatus}
+            isAutoModeRunning={isAutoModeRunningForWorktree(selectedWorktree)}
             onOpenChange={handleActionsDropdownOpenChange(selectedWorktree)}
             onPull={handlePull}
             onPush={handlePush}
@@ -261,6 +323,7 @@ export function WorktreePanel({
             onOpenDevServerUrl={handleOpenDevServerUrl}
             onViewDevServerLogs={handleViewDevServerLogs}
             onRunInitScript={handleRunInitScript}
+            onToggleAutoMode={handleToggleAutoMode}
             hasInitScript={hasInitScript}
           />
         )}
@@ -328,6 +391,7 @@ export function WorktreePanel({
             aheadCount={aheadCount}
             behindCount={behindCount}
             gitRepoStatus={gitRepoStatus}
+            isAutoModeRunning={isAutoModeRunningForWorktree(mainWorktree)}
             onSelectWorktree={handleSelectWorktree}
             onBranchDropdownOpenChange={handleBranchDropdownOpenChange(mainWorktree)}
             onActionsDropdownOpenChange={handleActionsDropdownOpenChange(mainWorktree)}
@@ -350,6 +414,7 @@ export function WorktreePanel({
             onOpenDevServerUrl={handleOpenDevServerUrl}
             onViewDevServerLogs={handleViewDevServerLogs}
             onRunInitScript={handleRunInitScript}
+            onToggleAutoMode={handleToggleAutoMode}
             hasInitScript={hasInitScript}
           />
         )}
@@ -388,6 +453,7 @@ export function WorktreePanel({
                   aheadCount={aheadCount}
                   behindCount={behindCount}
                   gitRepoStatus={gitRepoStatus}
+                  isAutoModeRunning={isAutoModeRunningForWorktree(worktree)}
                   onSelectWorktree={handleSelectWorktree}
                   onBranchDropdownOpenChange={handleBranchDropdownOpenChange(worktree)}
                   onActionsDropdownOpenChange={handleActionsDropdownOpenChange(worktree)}
@@ -410,6 +476,7 @@ export function WorktreePanel({
                   onOpenDevServerUrl={handleOpenDevServerUrl}
                   onViewDevServerLogs={handleViewDevServerLogs}
                   onRunInitScript={handleRunInitScript}
+                  onToggleAutoMode={handleToggleAutoMode}
                   hasInitScript={hasInitScript}
                 />
               );

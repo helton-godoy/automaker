@@ -833,6 +833,9 @@ export const CREDENTIALS_VERSION = 1;
 /** Current version of the project settings schema */
 export const PROJECT_SETTINGS_VERSION = 1;
 
+/** Default maximum concurrent agents for auto mode */
+export const DEFAULT_MAX_CONCURRENCY = 1;
+
 /** Default keyboard shortcut bindings */
 export const DEFAULT_KEYBOARD_SHORTCUTS: KeyboardShortcuts = {
   board: 'K',
@@ -866,7 +869,7 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   theme: 'dark',
   sidebarOpen: true,
   chatHistoryOpen: false,
-  maxConcurrency: 3,
+  maxConcurrency: DEFAULT_MAX_CONCURRENCY,
   defaultSkipTests: true,
   enableDependencyBlocking: true,
   skipVerificationInAutoMode: false,

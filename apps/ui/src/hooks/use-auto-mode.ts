@@ -1,13 +1,24 @@
 import { useEffect, useCallback, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { createLogger } from '@automaker/utils/logger';
+import { DEFAULT_MAX_CONCURRENCY } from '@automaker/types';
 import { useAppStore } from '@/store/app-store';
 import { getElectronAPI } from '@/lib/electron';
 import type { AutoModeEvent } from '@/types/electron';
+import type { WorktreeInfo } from '@/components/views/board-view/worktree-panel/types';
 
 const logger = createLogger('AutoMode');
 
-const AUTO_MODE_SESSION_KEY = 'automaker:autoModeRunningByProjectPath';
+const AUTO_MODE_SESSION_KEY = 'automaker:autoModeRunningByWorktreeKey';
+
+/**
+ * Generate a worktree key for session storage
+ * @param projectPath - The project path
+ * @param branchName - The branch name, or null for main worktree
+ */
+function getWorktreeSessionKey(projectPath: string, branchName: string | null): string {
+  return `${projectPath}::${branchName ?? '__main__'}`;
+}
 
 function readAutoModeSession(): Record<string, boolean> {
   try {
@@ -31,9 +42,14 @@ function writeAutoModeSession(next: Record<string, boolean>): void {
   }
 }
 
-function setAutoModeSessionForProjectPath(projectPath: string, running: boolean): void {
+function setAutoModeSessionForWorktree(
+  projectPath: string,
+  branchName: string | null,
+  running: boolean
+): void {
+  const worktreeKey = getWorktreeSessionKey(projectPath, branchName);
   const current = readAutoModeSession();
-  const next = { ...current, [projectPath]: running };
+  const next = { ...current, [worktreeKey]: running };
   writeAutoModeSession(next);
 }
 
@@ -45,32 +61,43 @@ function isPlanApprovalEvent(
 }
 
 /**
- * Hook for managing auto mode (scoped per project)
+ * Hook for managing auto mode (scoped per worktree)
+ * @param worktree - Optional worktree info. If not provided, uses main worktree (branchName = null)
  */
-export function useAutoMode() {
+export function useAutoMode(worktree?: WorktreeInfo) {
   const {
-    autoModeByProject,
+    autoModeByWorktree,
     setAutoModeRunning,
     addRunningTask,
     removeRunningTask,
     currentProject,
     addAutoModeActivity,
-    maxConcurrency,
     projects,
     setPendingPlanApproval,
+    getWorktreeKey,
+    getMaxConcurrencyForWorktree,
+    setMaxConcurrencyForWorktree,
   } = useAppStore(
     useShallow((state) => ({
-      autoModeByProject: state.autoModeByProject,
+      autoModeByWorktree: state.autoModeByWorktree,
       setAutoModeRunning: state.setAutoModeRunning,
       addRunningTask: state.addRunningTask,
       removeRunningTask: state.removeRunningTask,
       currentProject: state.currentProject,
       addAutoModeActivity: state.addAutoModeActivity,
-      maxConcurrency: state.maxConcurrency,
       projects: state.projects,
       setPendingPlanApproval: state.setPendingPlanApproval,
+      getWorktreeKey: state.getWorktreeKey,
+      getMaxConcurrencyForWorktree: state.getMaxConcurrencyForWorktree,
+      setMaxConcurrencyForWorktree: state.setMaxConcurrencyForWorktree,
     }))
   );
+
+  // Derive branchName from worktree: main worktree uses null, feature worktrees use their branch
+  const branchName = useMemo(() => {
+    if (!worktree) return null;
+    return worktree.isMain ? null : worktree.branch;
+  }, [worktree]);
 
   // Helper to look up project ID from path
   const getProjectIdFromPath = useCallback(
@@ -81,15 +108,30 @@ export function useAutoMode() {
     [projects]
   );
 
-  // Get project-specific auto mode state
+  // Get worktree-specific auto mode state
   const projectId = currentProject?.id;
-  const projectAutoModeState = useMemo(() => {
-    if (!projectId) return { isRunning: false, runningTasks: [] };
-    return autoModeByProject[projectId] || { isRunning: false, runningTasks: [] };
-  }, [autoModeByProject, projectId]);
+  const worktreeAutoModeState = useMemo(() => {
+    if (!projectId)
+      return {
+        isRunning: false,
+        runningTasks: [],
+        branchName: null,
+        maxConcurrency: DEFAULT_MAX_CONCURRENCY,
+      };
+    const key = getWorktreeKey(projectId, branchName);
+    return (
+      autoModeByWorktree[key] || {
+        isRunning: false,
+        runningTasks: [],
+        branchName,
+        maxConcurrency: DEFAULT_MAX_CONCURRENCY,
+      }
+    );
+  }, [autoModeByWorktree, projectId, branchName, getWorktreeKey]);
 
-  const isAutoModeRunning = projectAutoModeState.isRunning;
-  const runningAutoTasks = projectAutoModeState.runningTasks;
+  const isAutoModeRunning = worktreeAutoModeState.isRunning;
+  const runningAutoTasks = worktreeAutoModeState.runningTasks;
+  const maxConcurrency = worktreeAutoModeState.maxConcurrency ?? DEFAULT_MAX_CONCURRENCY;
 
   // Check if we can start a new task based on concurrency limit
   const canStartNewTask = runningAutoTasks.length < maxConcurrency;
@@ -104,15 +146,17 @@ export function useAutoMode() {
         const api = getElectronAPI();
         if (!api?.autoMode?.status) return;
 
-        const result = await api.autoMode.status(currentProject.path);
+        const result = await api.autoMode.status(currentProject.path, branchName);
         if (result.success && result.isAutoLoopRunning !== undefined) {
           const backendIsRunning = result.isAutoLoopRunning;
+
           if (backendIsRunning !== isAutoModeRunning) {
+            const worktreeDesc = branchName ? `worktree ${branchName}` : 'main worktree';
             logger.info(
-              `[AutoMode] Syncing UI state with backend for ${currentProject.path}: ${backendIsRunning ? 'ON' : 'OFF'}`
+              `[AutoMode] Syncing UI state with backend for ${worktreeDesc} in ${currentProject.path}: ${backendIsRunning ? 'ON' : 'OFF'}`
             );
-            setAutoModeRunning(currentProject.id, backendIsRunning);
-            setAutoModeSessionForProjectPath(currentProject.path, backendIsRunning);
+            setAutoModeRunning(currentProject.id, branchName, backendIsRunning);
+            setAutoModeSessionForWorktree(currentProject.path, branchName, backendIsRunning);
           }
         }
       } catch (error) {
@@ -121,9 +165,9 @@ export function useAutoMode() {
     };
 
     syncWithBackend();
-  }, [currentProject, isAutoModeRunning, setAutoModeRunning]);
+  }, [currentProject, branchName, isAutoModeRunning, setAutoModeRunning]);
 
-  // Handle auto mode events - listen globally for all projects
+  // Handle auto mode events - listen globally for all projects/worktrees
   useEffect(() => {
     const api = getElectronAPI();
     if (!api?.autoMode) return;
@@ -131,8 +175,8 @@ export function useAutoMode() {
     const unsubscribe = api.autoMode.onEvent((event: AutoModeEvent) => {
       logger.info('Event:', event);
 
-      // Events include projectPath from backend - use it to look up project ID
-      // Fall back to current projectId if not provided in event
+      // Events include projectPath and branchName from backend
+      // Use them to look up project ID and determine the worktree
       let eventProjectId: string | undefined;
       if ('projectPath' in event && event.projectPath) {
         eventProjectId = getProjectIdFromPath(event.projectPath);
@@ -144,6 +188,10 @@ export function useAutoMode() {
         eventProjectId = projectId;
       }
 
+      // Extract branchName from event, defaulting to null (main worktree)
+      const eventBranchName: string | null =
+        'branchName' in event && event.branchName !== undefined ? event.branchName : null;
+
       // Skip event if we couldn't determine the project
       if (!eventProjectId) {
         logger.warn('Could not determine project for event:', event);
@@ -153,23 +201,34 @@ export function useAutoMode() {
       switch (event.type) {
         case 'auto_mode_started':
           // Backend started auto loop - update UI state
-          logger.info('[AutoMode] Backend started auto loop for project');
-          if (eventProjectId) {
-            setAutoModeRunning(eventProjectId, true);
+          {
+            const worktreeDesc = eventBranchName ? `worktree ${eventBranchName}` : 'main worktree';
+            logger.info(`[AutoMode] Backend started auto loop for ${worktreeDesc}`);
+            if (eventProjectId) {
+              // Extract maxConcurrency from event if available, otherwise use current or default
+              const eventMaxConcurrency =
+                'maxConcurrency' in event && typeof event.maxConcurrency === 'number'
+                  ? event.maxConcurrency
+                  : getMaxConcurrencyForWorktree(eventProjectId, eventBranchName);
+              setAutoModeRunning(eventProjectId, eventBranchName, true, eventMaxConcurrency);
+            }
           }
           break;
 
         case 'auto_mode_stopped':
           // Backend stopped auto loop - update UI state
-          logger.info('[AutoMode] Backend stopped auto loop for project');
-          if (eventProjectId) {
-            setAutoModeRunning(eventProjectId, false);
+          {
+            const worktreeDesc = eventBranchName ? `worktree ${eventBranchName}` : 'main worktree';
+            logger.info(`[AutoMode] Backend stopped auto loop for ${worktreeDesc}`);
+            if (eventProjectId) {
+              setAutoModeRunning(eventProjectId, eventBranchName, false);
+            }
           }
           break;
 
         case 'auto_mode_feature_start':
           if (event.featureId) {
-            addRunningTask(eventProjectId, event.featureId);
+            addRunningTask(eventProjectId, eventBranchName, event.featureId);
             addAutoModeActivity({
               featureId: event.featureId,
               type: 'start',
@@ -182,7 +241,7 @@ export function useAutoMode() {
           // Feature completed - remove from running tasks and UI will reload features on its own
           if (event.featureId) {
             logger.info('Feature completed:', event.featureId, 'passes:', event.passes);
-            removeRunningTask(eventProjectId, event.featureId);
+            removeRunningTask(eventProjectId, eventBranchName, event.featureId);
             addAutoModeActivity({
               featureId: event.featureId,
               type: 'complete',
@@ -202,7 +261,7 @@ export function useAutoMode() {
               logger.info('Feature cancelled/aborted:', event.error);
               // Remove from running tasks
               if (eventProjectId) {
-                removeRunningTask(eventProjectId, event.featureId);
+                removeRunningTask(eventProjectId, eventBranchName, event.featureId);
               }
               break;
             }
@@ -229,7 +288,7 @@ export function useAutoMode() {
 
             // Remove the task from running since it failed
             if (eventProjectId) {
-              removeRunningTask(eventProjectId, event.featureId);
+              removeRunningTask(eventProjectId, eventBranchName, event.featureId);
             }
           }
           break;
@@ -404,9 +463,11 @@ export function useAutoMode() {
     setPendingPlanApproval,
     setAutoModeRunning,
     currentProject?.path,
+    getMaxConcurrencyForWorktree,
+    setMaxConcurrencyForWorktree,
   ]);
 
-  // Start auto mode - calls backend to start the auto loop
+  // Start auto mode - calls backend to start the auto loop for this worktree
   const start = useCallback(async () => {
     if (!currentProject) {
       logger.error('No project selected');
@@ -419,36 +480,35 @@ export function useAutoMode() {
         throw new Error('Start auto mode API not available');
       }
 
-      logger.info(
-        `[AutoMode] Starting auto loop for ${currentProject.path} with maxConcurrency: ${maxConcurrency}`
-      );
+      const worktreeDesc = branchName ? `worktree ${branchName}` : 'main worktree';
+      logger.info(`[AutoMode] Starting auto loop for ${worktreeDesc} in ${currentProject.path}`);
 
       // Optimistically update UI state (backend will confirm via event)
-      setAutoModeSessionForProjectPath(currentProject.path, true);
-      setAutoModeRunning(currentProject.id, true);
+      setAutoModeSessionForWorktree(currentProject.path, branchName, true);
+      setAutoModeRunning(currentProject.id, branchName, true);
 
-      // Call backend to start the auto loop
-      const result = await api.autoMode.start(currentProject.path, maxConcurrency);
+      // Call backend to start the auto loop (backend uses stored concurrency)
+      const result = await api.autoMode.start(currentProject.path, branchName);
 
       if (!result.success) {
         // Revert UI state on failure
-        setAutoModeSessionForProjectPath(currentProject.path, false);
-        setAutoModeRunning(currentProject.id, false);
+        setAutoModeSessionForWorktree(currentProject.path, branchName, false);
+        setAutoModeRunning(currentProject.id, branchName, false);
         logger.error('Failed to start auto mode:', result.error);
         throw new Error(result.error || 'Failed to start auto mode');
       }
 
-      logger.debug(`[AutoMode] Started successfully`);
+      logger.debug(`[AutoMode] Started successfully for ${worktreeDesc}`);
     } catch (error) {
       // Revert UI state on error
-      setAutoModeSessionForProjectPath(currentProject.path, false);
-      setAutoModeRunning(currentProject.id, false);
+      setAutoModeSessionForWorktree(currentProject.path, branchName, false);
+      setAutoModeRunning(currentProject.id, branchName, false);
       logger.error('Error starting auto mode:', error);
       throw error;
     }
-  }, [currentProject, setAutoModeRunning, maxConcurrency]);
+  }, [currentProject, branchName, setAutoModeRunning]);
 
-  // Stop auto mode - calls backend to stop the auto loop
+  // Stop auto mode - calls backend to stop the auto loop for this worktree
   const stop = useCallback(async () => {
     if (!currentProject) {
       logger.error('No project selected');
@@ -461,34 +521,35 @@ export function useAutoMode() {
         throw new Error('Stop auto mode API not available');
       }
 
-      logger.info(`[AutoMode] Stopping auto loop for ${currentProject.path}`);
+      const worktreeDesc = branchName ? `worktree ${branchName}` : 'main worktree';
+      logger.info(`[AutoMode] Stopping auto loop for ${worktreeDesc} in ${currentProject.path}`);
 
       // Optimistically update UI state (backend will confirm via event)
-      setAutoModeSessionForProjectPath(currentProject.path, false);
-      setAutoModeRunning(currentProject.id, false);
+      setAutoModeSessionForWorktree(currentProject.path, branchName, false);
+      setAutoModeRunning(currentProject.id, branchName, false);
 
       // Call backend to stop the auto loop
-      const result = await api.autoMode.stop(currentProject.path);
+      const result = await api.autoMode.stop(currentProject.path, branchName);
 
       if (!result.success) {
         // Revert UI state on failure
-        setAutoModeSessionForProjectPath(currentProject.path, true);
-        setAutoModeRunning(currentProject.id, true);
+        setAutoModeSessionForWorktree(currentProject.path, branchName, true);
+        setAutoModeRunning(currentProject.id, branchName, true);
         logger.error('Failed to stop auto mode:', result.error);
         throw new Error(result.error || 'Failed to stop auto mode');
       }
 
       // NOTE: Running tasks will continue until natural completion.
       // The backend stops picking up new features but doesn't abort running ones.
-      logger.info('Stopped - running tasks will continue');
+      logger.info(`Stopped ${worktreeDesc} - running tasks will continue`);
     } catch (error) {
       // Revert UI state on error
-      setAutoModeSessionForProjectPath(currentProject.path, true);
-      setAutoModeRunning(currentProject.id, true);
+      setAutoModeSessionForWorktree(currentProject.path, branchName, true);
+      setAutoModeRunning(currentProject.id, branchName, true);
       logger.error('Error stopping auto mode:', error);
       throw error;
     }
-  }, [currentProject, setAutoModeRunning]);
+  }, [currentProject, branchName, setAutoModeRunning]);
 
   // Stop a specific feature
   const stopFeature = useCallback(
@@ -507,7 +568,7 @@ export function useAutoMode() {
         const result = await api.autoMode.stopFeature(featureId);
 
         if (result.success) {
-          removeRunningTask(currentProject.id, featureId);
+          removeRunningTask(currentProject.id, branchName, featureId);
           logger.info('Feature stopped successfully:', featureId);
           addAutoModeActivity({
             featureId,
@@ -524,7 +585,7 @@ export function useAutoMode() {
         throw error;
       }
     },
-    [currentProject, removeRunningTask, addAutoModeActivity]
+    [currentProject, branchName, removeRunningTask, addAutoModeActivity]
   );
 
   return {
@@ -532,6 +593,7 @@ export function useAutoMode() {
     runningTasks: runningAutoTasks,
     maxConcurrency,
     canStartNewTask,
+    branchName,
     start,
     stop,
     stopFeature,

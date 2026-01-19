@@ -80,6 +80,13 @@ export function HeaderMobileMenu({
                 )}
               />
               <span className="text-sm font-medium">Auto Mode</span>
+              <span
+                className="text-[10px] font-medium text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded"
+                data-testid="mobile-auto-mode-max-concurrency"
+                title="Max concurrent agents"
+              >
+                {maxConcurrency}
+              </span>
             </div>
             <div className="flex items-center gap-2">
               <Switch

@@ -12,8 +12,9 @@ const logger = createLogger('AutoMode');
 export function createStartHandler(autoModeService: AutoModeService) {
   return async (req: Request, res: Response): Promise<void> => {
     try {
-      const { projectPath, maxConcurrency } = req.body as {
+      const { projectPath, branchName, maxConcurrency } = req.body as {
         projectPath: string;
+        branchName?: string | null;
         maxConcurrency?: number;
       };
 
@@ -25,26 +26,38 @@ export function createStartHandler(autoModeService: AutoModeService) {
         return;
       }
 
+      // Normalize branchName: undefined becomes null
+      const normalizedBranchName = branchName ?? null;
+      const worktreeDesc = normalizedBranchName
+        ? `worktree ${normalizedBranchName}`
+        : 'main worktree';
+
       // Check if already running
-      if (autoModeService.isAutoLoopRunningForProject(projectPath)) {
+      if (autoModeService.isAutoLoopRunningForProject(projectPath, normalizedBranchName)) {
         res.json({
           success: true,
-          message: 'Auto mode is already running for this project',
+          message: `Auto mode is already running for ${worktreeDesc}`,
           alreadyRunning: true,
+          branchName: normalizedBranchName,
         });
         return;
       }
 
-      // Start the auto loop for this project
-      await autoModeService.startAutoLoopForProject(projectPath, maxConcurrency ?? 3);
+      // Start the auto loop for this project/worktree
+      const resolvedMaxConcurrency = await autoModeService.startAutoLoopForProject(
+        projectPath,
+        normalizedBranchName,
+        maxConcurrency
+      );
 
       logger.info(
-        `Started auto loop for project: ${projectPath} with maxConcurrency: ${maxConcurrency ?? 3}`
+        `Started auto loop for ${worktreeDesc} in project: ${projectPath} with maxConcurrency: ${resolvedMaxConcurrency}`
       );
 
       res.json({
         success: true,
-        message: `Auto mode started with max ${maxConcurrency ?? 3} concurrent features`,
+        message: `Auto mode started with max ${resolvedMaxConcurrency} concurrent features`,
+        branchName: normalizedBranchName,
       });
     } catch (error) {
       logError(error, 'Start auto mode failed');

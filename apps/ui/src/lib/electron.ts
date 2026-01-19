@@ -28,6 +28,7 @@ import type {
   UpdateIdeaInput,
   ConvertToFeatureOptions,
 } from '@automaker/types';
+import { DEFAULT_MAX_CONCURRENCY } from '@automaker/types';
 import { getJSON, setJSON, removeItem } from './storage';
 
 // Re-export issue validation types for use in components
@@ -486,13 +487,18 @@ export interface FeaturesAPI {
 export interface AutoModeAPI {
   start: (
     projectPath: string,
+    branchName?: string | null,
     maxConcurrency?: number
   ) => Promise<{ success: boolean; error?: string }>;
   stop: (
-    projectPath: string
+    projectPath: string,
+    branchName?: string | null
   ) => Promise<{ success: boolean; error?: string; runningFeatures?: number }>;
   stopFeature: (featureId: string) => Promise<{ success: boolean; error?: string }>;
-  status: (projectPath?: string) => Promise<{
+  status: (
+    projectPath?: string,
+    branchName?: string | null
+  ) => Promise<{
     success: boolean;
     isRunning?: boolean;
     isAutoLoopRunning?: boolean;
@@ -2060,7 +2066,9 @@ function createMockAutoModeAPI(): AutoModeAPI {
       }
 
       mockAutoModeRunning = true;
-      console.log(`[Mock] Auto mode started with maxConcurrency: ${maxConcurrency || 3}`);
+      console.log(
+        `[Mock] Auto mode started with maxConcurrency: ${maxConcurrency || DEFAULT_MAX_CONCURRENCY}`
+      );
       const featureId = 'auto-mode-0';
       mockRunningFeatures.add(featureId);
 

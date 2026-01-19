@@ -38,6 +38,7 @@ import {
   getAllOpencodeModelIds,
   DEFAULT_PHASE_MODELS,
   DEFAULT_OPENCODE_MODEL,
+  DEFAULT_MAX_CONCURRENCY,
 } from '@automaker/types';
 
 const logger = createLogger('AppStore');
@@ -626,16 +627,18 @@ export interface AppState {
   currentChatSession: ChatSession | null;
   chatHistoryOpen: boolean;
 
-  // Auto Mode (per-project state, keyed by project ID)
-  autoModeByProject: Record<
+  // Auto Mode (per-worktree state, keyed by "${projectId}::${branchName ?? '__main__'}")
+  autoModeByWorktree: Record<
     string,
     {
       isRunning: boolean;
       runningTasks: string[]; // Feature IDs being worked on
+      branchName: string | null; // null = main worktree
+      maxConcurrency?: number; // Maximum concurrent features for this worktree (defaults to 3)
     }
   >;
   autoModeActivityLog: AutoModeActivity[];
-  maxConcurrency: number; // Maximum number of concurrent agent tasks
+  maxConcurrency: number; // Legacy: Maximum number of concurrent agent tasks (deprecated, use per-worktree maxConcurrency)
 
   // Kanban Card Display Settings
   boardViewMode: BoardViewMode; // Whether to show kanban or dependency graph view
@@ -1057,18 +1060,36 @@ export interface AppActions {
   setChatHistoryOpen: (open: boolean) => void;
   toggleChatHistory: () => void;
 
-  // Auto Mode actions (per-project)
-  setAutoModeRunning: (projectId: string, running: boolean) => void;
-  addRunningTask: (projectId: string, taskId: string) => void;
-  removeRunningTask: (projectId: string, taskId: string) => void;
-  clearRunningTasks: (projectId: string) => void;
-  getAutoModeState: (projectId: string) => {
+  // Auto Mode actions (per-worktree)
+  setAutoModeRunning: (
+    projectId: string,
+    branchName: string | null,
+    running: boolean,
+    maxConcurrency?: number
+  ) => void;
+  addRunningTask: (projectId: string, branchName: string | null, taskId: string) => void;
+  removeRunningTask: (projectId: string, branchName: string | null, taskId: string) => void;
+  clearRunningTasks: (projectId: string, branchName: string | null) => void;
+  getAutoModeState: (
+    projectId: string,
+    branchName: string | null
+  ) => {
     isRunning: boolean;
     runningTasks: string[];
+    branchName: string | null;
+    maxConcurrency?: number;
   };
+  /** Helper to generate worktree key from projectId and branchName */
+  getWorktreeKey: (projectId: string, branchName: string | null) => string;
   addAutoModeActivity: (activity: Omit<AutoModeActivity, 'id' | 'timestamp'>) => void;
   clearAutoModeActivity: () => void;
-  setMaxConcurrency: (max: number) => void;
+  setMaxConcurrency: (max: number) => void; // Legacy: kept for backward compatibility
+  getMaxConcurrencyForWorktree: (projectId: string, branchName: string | null) => number;
+  setMaxConcurrencyForWorktree: (
+    projectId: string,
+    branchName: string | null,
+    maxConcurrency: number
+  ) => void;
 
   // Kanban Card Settings actions
   setBoardViewMode: (mode: BoardViewMode) => void;
@@ -1387,9 +1408,9 @@ const initialState: AppState = {
   chatSessions: [],
   currentChatSession: null,
   chatHistoryOpen: false,
-  autoModeByProject: {},
+  autoModeByWorktree: {},
   autoModeActivityLog: [],
-  maxConcurrency: 3, // Default to 3 concurrent agents
+  maxConcurrency: DEFAULT_MAX_CONCURRENCY, // Default concurrent agents
   boardViewMode: 'kanban', // Default to kanban view
   defaultSkipTests: true, // Default to manual verification (tests disabled)
   enableDependencyBlocking: true, // Default to enabled (show dependency blocking UI)
@@ -2073,74 +2094,125 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
 
   toggleChatHistory: () => set({ chatHistoryOpen: !get().chatHistoryOpen }),
 
-  // Auto Mode actions (per-project)
-  setAutoModeRunning: (projectId, running) => {
-    const current = get().autoModeByProject;
-    const projectState = current[projectId] || {
+  // Auto Mode actions (per-worktree)
+  getWorktreeKey: (projectId, branchName) => {
+    return `${projectId}::${branchName ?? '__main__'}`;
+  },
+
+  setAutoModeRunning: (projectId, branchName, running, maxConcurrency?: number) => {
+    const worktreeKey = get().getWorktreeKey(projectId, branchName);
+    const current = get().autoModeByWorktree;
+    const worktreeState = current[worktreeKey] || {
       isRunning: false,
       runningTasks: [],
+      branchName,
+      maxConcurrency: maxConcurrency ?? DEFAULT_MAX_CONCURRENCY,
     };
     set({
-      autoModeByProject: {
+      autoModeByWorktree: {
         ...current,
-        [projectId]: { ...projectState, isRunning: running },
+        [worktreeKey]: {
+          ...worktreeState,
+          isRunning: running,
+          branchName,
+          maxConcurrency: maxConcurrency ?? worktreeState.maxConcurrency ?? DEFAULT_MAX_CONCURRENCY,
+        },
       },
     });
   },
 
-  addRunningTask: (projectId, taskId) => {
-    const current = get().autoModeByProject;
-    const projectState = current[projectId] || {
+  addRunningTask: (projectId, branchName, taskId) => {
+    const worktreeKey = get().getWorktreeKey(projectId, branchName);
+    const current = get().autoModeByWorktree;
+    const worktreeState = current[worktreeKey] || {
       isRunning: false,
       runningTasks: [],
+      branchName,
     };
-    if (!projectState.runningTasks.includes(taskId)) {
+    if (!worktreeState.runningTasks.includes(taskId)) {
       set({
-        autoModeByProject: {
+        autoModeByWorktree: {
           ...current,
-          [projectId]: {
-            ...projectState,
-            runningTasks: [...projectState.runningTasks, taskId],
+          [worktreeKey]: {
+            ...worktreeState,
+            runningTasks: [...worktreeState.runningTasks, taskId],
+            branchName,
           },
         },
       });
     }
   },
 
-  removeRunningTask: (projectId, taskId) => {
-    const current = get().autoModeByProject;
-    const projectState = current[projectId] || {
+  removeRunningTask: (projectId, branchName, taskId) => {
+    const worktreeKey = get().getWorktreeKey(projectId, branchName);
+    const current = get().autoModeByWorktree;
+    const worktreeState = current[worktreeKey] || {
       isRunning: false,
       runningTasks: [],
+      branchName,
     };
     set({
-      autoModeByProject: {
+      autoModeByWorktree: {
         ...current,
-        [projectId]: {
-          ...projectState,
-          runningTasks: projectState.runningTasks.filter((id) => id !== taskId),
+        [worktreeKey]: {
+          ...worktreeState,
+          runningTasks: worktreeState.runningTasks.filter((id) => id !== taskId),
+          branchName,
         },
       },
     });
   },
 
-  clearRunningTasks: (projectId) => {
-    const current = get().autoModeByProject;
-    const projectState = current[projectId] || {
+  clearRunningTasks: (projectId, branchName) => {
+    const worktreeKey = get().getWorktreeKey(projectId, branchName);
+    const current = get().autoModeByWorktree;
+    const worktreeState = current[worktreeKey] || {
       isRunning: false,
       runningTasks: [],
+      branchName,
     };
     set({
-      autoModeByProject: {
+      autoModeByWorktree: {
         ...current,
-        [projectId]: { ...projectState, runningTasks: [] },
+        [worktreeKey]: { ...worktreeState, runningTasks: [], branchName },
       },
     });
   },
 
-  getAutoModeState: (projectId) => {
-    const projectState = get().autoModeByProject[projectId];
-    return projectState || { isRunning: false, runningTasks: [] };
+  getAutoModeState: (projectId, branchName) => {
+    const worktreeKey = get().getWorktreeKey(projectId, branchName);
+    const worktreeState = get().autoModeByWorktree[worktreeKey];
+    return (
+      worktreeState || {
+        isRunning: false,
+        runningTasks: [],
+        branchName,
+        maxConcurrency: DEFAULT_MAX_CONCURRENCY,
+      }
+    );
+  },
+
+  getMaxConcurrencyForWorktree: (projectId, branchName) => {
+    const worktreeKey = get().getWorktreeKey(projectId, branchName);
+    const worktreeState = get().autoModeByWorktree[worktreeKey];
+    return worktreeState?.maxConcurrency ?? DEFAULT_MAX_CONCURRENCY;
+  },
+
+  setMaxConcurrencyForWorktree: (projectId, branchName, maxConcurrency) => {
+    const worktreeKey = get().getWorktreeKey(projectId, branchName);
+    const current = get().autoModeByWorktree;
+    const worktreeState = current[worktreeKey] || {
+      isRunning: false,
+      runningTasks: [],
+      branchName,
+      maxConcurrency: DEFAULT_MAX_CONCURRENCY,
+    };
+    set({
+      autoModeByWorktree: {
+        ...current,
+        [worktreeKey]: { ...worktreeState, maxConcurrency, branchName },
+      },
+    });
   },
 
   addAutoModeActivity: (activity) => {

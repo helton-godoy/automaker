@@ -12,11 +12,19 @@ import { getErrorMessage, logError } from '../common.js';
 export function createStatusHandler(autoModeService: AutoModeService) {
   return async (req: Request, res: Response): Promise<void> => {
     try {
-      const { projectPath } = req.body as { projectPath?: string };
+      const { projectPath, branchName } = req.body as {
+        projectPath?: string;
+        branchName?: string | null;
+      };
 
-      // If projectPath is provided, return per-project status
+      // If projectPath is provided, return per-project/worktree status
       if (projectPath) {
-        const projectStatus = autoModeService.getStatusForProject(projectPath);
+        // Normalize branchName: undefined becomes null
+        const normalizedBranchName = branchName ?? null;
+        const projectStatus = autoModeService.getStatusForProject(
+          projectPath,
+          normalizedBranchName
+        );
         res.json({
           success: true,
           isRunning: projectStatus.runningCount > 0,
@@ -25,6 +33,7 @@ export function createStatusHandler(autoModeService: AutoModeService) {
           runningCount: projectStatus.runningCount,
           maxConcurrency: projectStatus.maxConcurrency,
           projectPath,
+          branchName: normalizedBranchName,
         });
         return;
       }
@@ -32,10 +41,12 @@ export function createStatusHandler(autoModeService: AutoModeService) {
       // Fall back to global status for backward compatibility
       const status = autoModeService.getStatus();
       const activeProjects = autoModeService.getActiveAutoLoopProjects();
+      const activeWorktrees = autoModeService.getActiveAutoLoopWorktrees();
       res.json({
         success: true,
         ...status,
         activeAutoLoopProjects: activeProjects,
+        activeAutoLoopWorktrees: activeWorktrees,
       });
     } catch (error) {
       logError(error, 'Get status failed');

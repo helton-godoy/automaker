@@ -1667,11 +1667,13 @@ export class HttpApiClient implements ElectronAPI {
 
   // Auto Mode API
   autoMode: AutoModeAPI = {
-    start: (projectPath: string, maxConcurrency?: number) =>
-      this.post('/api/auto-mode/start', { projectPath, maxConcurrency }),
-    stop: (projectPath: string) => this.post('/api/auto-mode/stop', { projectPath }),
+    start: (projectPath: string, branchName?: string | null, maxConcurrency?: number) =>
+      this.post('/api/auto-mode/start', { projectPath, branchName, maxConcurrency }),
+    stop: (projectPath: string, branchName?: string | null) =>
+      this.post('/api/auto-mode/stop', { projectPath, branchName }),
     stopFeature: (featureId: string) => this.post('/api/auto-mode/stop-feature', { featureId }),
-    status: (projectPath?: string) => this.post('/api/auto-mode/status', { projectPath }),
+    status: (projectPath?: string, branchName?: string | null) =>
+      this.post('/api/auto-mode/status', { projectPath, branchName }),
     runFeature: (
       projectPath: string,
       featureId: string,

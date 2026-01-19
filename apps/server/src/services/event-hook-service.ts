@@ -57,6 +57,7 @@ interface HookContext {
 interface AutoModeEventPayload {
   type?: string;
   featureId?: string;
+  featureName?: string;
   passes?: boolean;
   message?: string;
   error?: string;
@@ -152,6 +153,7 @@ export class EventHookService {
     // Build context for variable substitution
     const context: HookContext = {
       featureId: payload.featureId,
+      featureName: payload.featureName,
       projectPath: payload.projectPath,
       projectName: payload.projectPath ? this.extractProjectName(payload.projectPath) : undefined,
       error: payload.error || payload.message,

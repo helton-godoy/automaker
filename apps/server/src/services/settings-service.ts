@@ -41,7 +41,12 @@ import {
   CREDENTIALS_VERSION,
   PROJECT_SETTINGS_VERSION,
 } from '../types/settings.js';
-import { migrateModelId, migrateCursorModelIds, migrateOpencodeModelIds } from '@automaker/types';
+import {
+  DEFAULT_MAX_CONCURRENCY,
+  migrateModelId,
+  migrateCursorModelIds,
+  migrateOpencodeModelIds,
+} from '@automaker/types';
 
 const logger = createLogger('SettingsService');
 
@@ -682,7 +687,7 @@ export class SettingsService {
         theme: (appState.theme as GlobalSettings['theme']) || 'dark',
         sidebarOpen: appState.sidebarOpen !== undefined ? (appState.sidebarOpen as boolean) : true,
         chatHistoryOpen: (appState.chatHistoryOpen as boolean) || false,
-        maxConcurrency: (appState.maxConcurrency as number) || 3,
+        maxConcurrency: (appState.maxConcurrency as number) || DEFAULT_MAX_CONCURRENCY,
         defaultSkipTests:
           appState.defaultSkipTests !== undefined ? (appState.defaultSkipTests as boolean) : true,
         enableDependencyBlocking:

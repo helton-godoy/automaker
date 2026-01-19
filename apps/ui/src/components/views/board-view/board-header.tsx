@@ -182,6 +182,13 @@ export function BoardHeader({
             >
               Auto Mode
             </Label>
+            <span
+              className="text-[10px] font-medium text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded"
+              data-testid="auto-mode-max-concurrency"
+              title="Max concurrent agents"
+            >
+              {maxConcurrency}
+            </span>
             <Switch
               id="auto-mode-toggle"
               checked={isAutoModeRunning}

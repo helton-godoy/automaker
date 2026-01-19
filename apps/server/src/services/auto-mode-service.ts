@@ -21,7 +21,12 @@ import type {
   ThinkingLevel,
   PlanningMode,
 } from '@automaker/types';
-import { DEFAULT_PHASE_MODELS, isClaudeModel, stripProviderPrefix } from '@automaker/types';
+import {
+  DEFAULT_PHASE_MODELS,
+  DEFAULT_MAX_CONCURRENCY,
+  isClaudeModel,
+  stripProviderPrefix,
+} from '@automaker/types';
 import {
   buildPromptWithImages,
   classifyError,
@@ -233,10 +238,20 @@ interface AutoModeConfig {
   maxConcurrency: number;
   useWorktrees: boolean;
   projectPath: string;
+  branchName: string | null; // null = main worktree
 }
 
 /**
- * Per-project autoloop state for multi-project support
+ * Generate a unique key for worktree-scoped auto loop state
+ * @param projectPath - The project path
+ * @param branchName - The branch name, or null for main worktree
+ */
+function getWorktreeAutoLoopKey(projectPath: string, branchName: string | null): string {
+  return `${projectPath}::${branchName ?? '__main__'}`;
+}
+
+/**
+ * Per-worktree autoloop state for multi-project/worktree support
  */
 interface ProjectAutoLoopState {
   abortController: AbortController;
@@ -244,6 +259,8 @@ interface ProjectAutoLoopState {
   isRunning: boolean;
   consecutiveFailures: { timestamp: number; error: string }[];
   pausedDueToFailures: boolean;
+  hasEmittedIdleEvent: boolean;
+  branchName: string | null; // null = main worktree
 }
 
 /**
@@ -255,6 +272,7 @@ interface ExecutionState {
   autoLoopWasRunning: boolean;
   maxConcurrency: number;
   projectPath: string;
+  branchName: string | null; // null = main worktree
   runningFeatureIds: string[];
   savedAt: string;
 }
@@ -263,8 +281,9 @@ interface ExecutionState {
 const DEFAULT_EXECUTION_STATE: ExecutionState = {
   version: 1,
   autoLoopWasRunning: false,
-  maxConcurrency: 3,
+  maxConcurrency: DEFAULT_MAX_CONCURRENCY,
   projectPath: '',
+  branchName: null,
   runningFeatureIds: [],
   savedAt: '',
 };
@@ -289,6 +308,8 @@ export class AutoModeService {
   // Track consecutive failures to detect quota/API issues (legacy global, now per-project in autoLoopsByProject)
   private consecutiveFailures: { timestamp: number; error: string }[] = [];
   private pausedDueToFailures = false;
+  // Track if idle event has been emitted (legacy, now per-project in autoLoopsByProject)
+  private hasEmittedIdleEvent = false;
 
   constructor(events: EventEmitter, settingsService?: SettingsService) {
     this.events = events;
@@ -472,24 +493,81 @@ export class AutoModeService {
     this.consecutiveFailures = [];
   }
 
-  /**
-   * Start the auto mode loop for a specific project (supports multiple concurrent projects)
-   * @param projectPath - The project to start auto mode for
-   * @param maxConcurrency - Maximum concurrent features (default: 3)
-   */
-  async startAutoLoopForProject(projectPath: string, maxConcurrency = 3): Promise<void> {
-    // Check if this project already has an active autoloop
-    const existingState = this.autoLoopsByProject.get(projectPath);
-    if (existingState?.isRunning) {
-      throw new Error(`Auto mode is already running for project: ${projectPath}`);
+  private async resolveMaxConcurrency(
+    projectPath: string,
+    branchName: string | null,
+    provided?: number
+  ): Promise<number> {
+    if (typeof provided === 'number' && Number.isFinite(provided)) {
+      return provided;
     }
 
-    // Create new project autoloop state
+    if (!this.settingsService) {
+      return DEFAULT_MAX_CONCURRENCY;
+    }
+
+    try {
+      const settings = await this.settingsService.getGlobalSettings();
+      const globalMax =
+        typeof settings.maxConcurrency === 'number'
+          ? settings.maxConcurrency
+          : DEFAULT_MAX_CONCURRENCY;
+      const projectId = settings.projects?.find((project) => project.path === projectPath)?.id;
+      const autoModeByWorktree = (settings as unknown as Record<string, unknown>)
+        .autoModeByWorktree;
+
+      if (projectId && autoModeByWorktree && typeof autoModeByWorktree === 'object') {
+        const key = `${projectId}::${branchName ?? '__main__'}`;
+        const entry = (autoModeByWorktree as Record<string, unknown>)[key] as
+          | { maxConcurrency?: number }
+          | undefined;
+        if (entry && typeof entry.maxConcurrency === 'number') {
+          return entry.maxConcurrency;
+        }
+      }
+
+      return globalMax;
+    } catch {
+      return DEFAULT_MAX_CONCURRENCY;
+    }
+  }
+
+  /**
+   * Start the auto mode loop for a specific project/worktree (supports multiple concurrent projects and worktrees)
+   * @param projectPath - The project to start auto mode for
+   * @param branchName - The branch name for worktree scoping, null for main worktree
+   * @param maxConcurrency - Maximum concurrent features (default: DEFAULT_MAX_CONCURRENCY)
+   */
+  async startAutoLoopForProject(
+    projectPath: string,
+    branchName: string | null = null,
+    maxConcurrency?: number
+  ): Promise<number> {
+    const resolvedMaxConcurrency = await this.resolveMaxConcurrency(
+      projectPath,
+      branchName,
+      maxConcurrency
+    );
+
+    // Use worktree-scoped key
+    const worktreeKey = getWorktreeAutoLoopKey(projectPath, branchName);
+
+    // Check if this project/worktree already has an active autoloop
+    const existingState = this.autoLoopsByProject.get(worktreeKey);
+    if (existingState?.isRunning) {
+      const worktreeDesc = branchName ? `worktree ${branchName}` : 'main worktree';
+      throw new Error(
+        `Auto mode is already running for ${worktreeDesc} in project: ${projectPath}`
+      );
+    }
+
+    // Create new project/worktree autoloop state
     const abortController = new AbortController();
     const config: AutoModeConfig = {
-      maxConcurrency,
+      maxConcurrency: resolvedMaxConcurrency,
       useWorktrees: true,
       projectPath,
+      branchName,
     };
 
     const projectState: ProjectAutoLoopState = {
@@ -498,56 +576,68 @@ export class AutoModeService {
       isRunning: true,
       consecutiveFailures: [],
       pausedDueToFailures: false,
+      hasEmittedIdleEvent: false,
+      branchName,
     };
 
-    this.autoLoopsByProject.set(projectPath, projectState);
+    this.autoLoopsByProject.set(worktreeKey, projectState);
 
+    const worktreeDesc = branchName ? `worktree ${branchName}` : 'main worktree';
     logger.info(
-      `Starting auto loop for project: ${projectPath} with maxConcurrency: ${maxConcurrency}`
+      `Starting auto loop for ${worktreeDesc} in project: ${projectPath} with maxConcurrency: ${resolvedMaxConcurrency}`
     );
 
     this.emitAutoModeEvent('auto_mode_started', {
-      message: `Auto mode started with max ${maxConcurrency} concurrent features`,
+      message: `Auto mode started with max ${resolvedMaxConcurrency} concurrent features`,
       projectPath,
+      branchName,
     });
 
     // Save execution state for recovery after restart
-    await this.saveExecutionStateForProject(projectPath, maxConcurrency);
+    await this.saveExecutionStateForProject(projectPath, branchName, resolvedMaxConcurrency);
 
     // Run the loop in the background
-    this.runAutoLoopForProject(projectPath).catch((error) => {
-      logger.error(`Loop error for ${projectPath}:`, error);
+    this.runAutoLoopForProject(worktreeKey).catch((error) => {
+      const worktreeDescErr = branchName ? `worktree ${branchName}` : 'main worktree';
+      logger.error(`Loop error for ${worktreeDescErr} in ${projectPath}:`, error);
       const errorInfo = classifyError(error);
       this.emitAutoModeEvent('auto_mode_error', {
         error: errorInfo.message,
         errorType: errorInfo.type,
         projectPath,
+        branchName,
       });
     });
+
+    return resolvedMaxConcurrency;
   }
 
   /**
-   * Run the auto loop for a specific project
+   * Run the auto loop for a specific project/worktree
+   * @param worktreeKey - The worktree key (projectPath::branchName or projectPath::__main__)
    */
-  private async runAutoLoopForProject(projectPath: string): Promise<void> {
-    const projectState = this.autoLoopsByProject.get(projectPath);
+  private async runAutoLoopForProject(worktreeKey: string): Promise<void> {
+    const projectState = this.autoLoopsByProject.get(worktreeKey);
     if (!projectState) {
-      logger.warn(`No project state found for ${projectPath}, stopping loop`);
+      logger.warn(`No project state found for ${worktreeKey}, stopping loop`);
       return;
     }
 
+    const { projectPath, branchName } = projectState.config;
+    const worktreeDesc = branchName ? `worktree ${branchName}` : 'main worktree';
+
     logger.info(
-      `[AutoLoop] Starting loop for ${projectPath}, maxConcurrency: ${projectState.config.maxConcurrency}`
+      `[AutoLoop] Starting loop for ${worktreeDesc} in ${projectPath}, maxConcurrency: ${projectState.config.maxConcurrency}`
     );
     let iterationCount = 0;
 
     while (projectState.isRunning && !projectState.abortController.signal.aborted) {
       iterationCount++;
       try {
-        // Count running features for THIS project only
-        const projectRunningCount = this.getRunningCountForProject(projectPath);
+        // Count running features for THIS project/worktree only
+        const projectRunningCount = this.getRunningCountForWorktree(projectPath, branchName);
 
-        // Check if we have capacity for this project
+        // Check if we have capacity for this project/worktree
         if (projectRunningCount >= projectState.config.maxConcurrency) {
           logger.debug(
             `[AutoLoop] At capacity (${projectRunningCount}/${projectState.config.maxConcurrency}), waiting...`
@@ -556,19 +646,32 @@ export class AutoModeService {
           continue;
         }
 
-        // Load pending features for this project
-        const pendingFeatures = await this.loadPendingFeatures(projectPath);
+        // Load pending features for this project/worktree
+        const pendingFeatures = await this.loadPendingFeatures(projectPath, branchName);
 
-        logger.debug(
-          `[AutoLoop] Iteration ${iterationCount}: Found ${pendingFeatures.length} pending features, ${projectRunningCount} running`
+        logger.info(
+          `[AutoLoop] Iteration ${iterationCount}: Found ${pendingFeatures.length} pending features, ${projectRunningCount}/${projectState.config.maxConcurrency} running for ${worktreeDesc}`
         );
 
         if (pendingFeatures.length === 0) {
-          this.emitAutoModeEvent('auto_mode_idle', {
-            message: 'No pending features - auto mode idle',
-            projectPath,
-          });
-          logger.info(`[AutoLoop] No pending features, sleeping for 10s...`);
+          // Emit idle event only once when backlog is empty AND no features are running
+          if (projectRunningCount === 0 && !projectState.hasEmittedIdleEvent) {
+            this.emitAutoModeEvent('auto_mode_idle', {
+              message: 'No pending features - auto mode idle',
+              projectPath,
+              branchName,
+            });
+            projectState.hasEmittedIdleEvent = true;
+            logger.info(`[AutoLoop] Backlog complete, auto mode now idle for ${worktreeDesc}`);
+          } else if (projectRunningCount > 0) {
+            logger.info(
+              `[AutoLoop] No pending features available, ${projectRunningCount} still running, waiting...`
+            );
+          } else {
+            logger.warn(
+              `[AutoLoop] No pending features found for ${worktreeDesc} (branchName: ${branchName === null ? 'null (main)' : branchName}). Check server logs for filtering details.`
+            );
+          }
           await this.sleep(10000);
           continue;
         }
@@ -578,6 +681,8 @@ export class AutoModeService {
 
         if (nextFeature) {
           logger.info(`[AutoLoop] Starting feature ${nextFeature.id}: ${nextFeature.title}`);
+          // Reset idle event flag since we're doing work again
+          projectState.hasEmittedIdleEvent = false;
           // Start feature execution in background
           this.executeFeature(
             projectPath,
@@ -619,13 +724,47 @@ export class AutoModeService {
   }
 
   /**
-   * Stop the auto mode loop for a specific project
-   * @param projectPath - The project to stop auto mode for
+   * Get count of running features for a specific worktree
+   * @param projectPath - The project path
+   * @param branchName - The branch name, or null for main worktree (features without branchName or with "main")
    */
-  async stopAutoLoopForProject(projectPath: string): Promise<number> {
-    const projectState = this.autoLoopsByProject.get(projectPath);
+  private getRunningCountForWorktree(projectPath: string, branchName: string | null): number {
+    let count = 0;
+    for (const [, feature] of this.runningFeatures) {
+      // Filter by project path AND branchName to get accurate worktree-specific count
+      const featureBranch = feature.branchName ?? null;
+      if (branchName === null) {
+        // Main worktree: match features with branchName === null OR branchName === "main"
+        if (
+          feature.projectPath === projectPath &&
+          (featureBranch === null || featureBranch === 'main')
+        ) {
+          count++;
+        }
+      } else {
+        // Feature worktree: exact match
+        if (feature.projectPath === projectPath && featureBranch === branchName) {
+          count++;
+        }
+      }
+    }
+    return count;
+  }
+
+  /**
+   * Stop the auto mode loop for a specific project/worktree
+   * @param projectPath - The project to stop auto mode for
+   * @param branchName - The branch name, or null for main worktree
+   */
+  async stopAutoLoopForProject(
+    projectPath: string,
+    branchName: string | null = null
+  ): Promise<number> {
+    const worktreeKey = getWorktreeAutoLoopKey(projectPath, branchName);
+    const projectState = this.autoLoopsByProject.get(worktreeKey);
     if (!projectState) {
-      logger.warn(`No auto loop running for project: ${projectPath}`);
+      const worktreeDesc = branchName ? `worktree ${branchName}` : 'main worktree';
+      logger.warn(`No auto loop running for ${worktreeDesc} in project: ${projectPath}`);
       return 0;
     }
 
@@ -634,43 +773,57 @@ export class AutoModeService {
     projectState.abortController.abort();
 
     // Clear execution state when auto-loop is explicitly stopped
-    await this.clearExecutionState(projectPath);
+    await this.clearExecutionState(projectPath, branchName);
 
     // Emit stop event
     if (wasRunning) {
       this.emitAutoModeEvent('auto_mode_stopped', {
         message: 'Auto mode stopped',
         projectPath,
+        branchName,
       });
     }
 
     // Remove from map
-    this.autoLoopsByProject.delete(projectPath);
+    this.autoLoopsByProject.delete(worktreeKey);
 
-    return this.getRunningCountForProject(projectPath);
+    return this.getRunningCountForWorktree(projectPath, branchName);
   }
 
   /**
-   * Check if auto mode is running for a specific project
+   * Check if auto mode is running for a specific project/worktree
+   * @param projectPath - The project path
+   * @param branchName - The branch name, or null for main worktree
    */
-  isAutoLoopRunningForProject(projectPath: string): boolean {
-    const projectState = this.autoLoopsByProject.get(projectPath);
+  isAutoLoopRunningForProject(projectPath: string, branchName: string | null = null): boolean {
+    const worktreeKey = getWorktreeAutoLoopKey(projectPath, branchName);
+    const projectState = this.autoLoopsByProject.get(worktreeKey);
     return projectState?.isRunning ?? false;
   }
 
   /**
-   * Get auto loop config for a specific project
+   * Get auto loop config for a specific project/worktree
+   * @param projectPath - The project path
+   * @param branchName - The branch name, or null for main worktree
    */
-  getAutoLoopConfigForProject(projectPath: string): AutoModeConfig | null {
-    const projectState = this.autoLoopsByProject.get(projectPath);
+  getAutoLoopConfigForProject(
+    projectPath: string,
+    branchName: string | null = null
+  ): AutoModeConfig | null {
+    const worktreeKey = getWorktreeAutoLoopKey(projectPath, branchName);
+    const projectState = this.autoLoopsByProject.get(worktreeKey);
     return projectState?.config ?? null;
   }
 
   /**
-   * Save execution state for a specific project
+   * Save execution state for a specific project/worktree
+   * @param projectPath - The project path
+   * @param branchName - The branch name, or null for main worktree
+   * @param maxConcurrency - Maximum concurrent features
    */
   private async saveExecutionStateForProject(
     projectPath: string,
+    branchName: string | null,
     maxConcurrency: number
   ): Promise<void> {
     try {
@@ -685,15 +838,18 @@ export class AutoModeService {
         autoLoopWasRunning: true,
         maxConcurrency,
         projectPath,
+        branchName,
         runningFeatureIds,
         savedAt: new Date().toISOString(),
       };
       await secureFs.writeFile(statePath, JSON.stringify(state, null, 2), 'utf-8');
+      const worktreeDesc = branchName ? `worktree ${branchName}` : 'main worktree';
       logger.info(
-        `Saved execution state for ${projectPath}: ${runningFeatureIds.length} running features`
+        `Saved execution state for ${worktreeDesc} in ${projectPath}: ${runningFeatureIds.length} running features`
       );
     } catch (error) {
-      logger.error(`Failed to save execution state for ${projectPath}:`, error);
+      const worktreeDesc = branchName ? `worktree ${branchName}` : 'main worktree';
+      logger.error(`Failed to save execution state for ${worktreeDesc} in ${projectPath}:`, error);
     }
   }
 
@@ -701,7 +857,10 @@ export class AutoModeService {
    * Start the auto mode loop - continuously picks and executes pending features
    * @deprecated Use startAutoLoopForProject instead for multi-project support
    */
-  async startAutoLoop(projectPath: string, maxConcurrency = 3): Promise<void> {
+  async startAutoLoop(
+    projectPath: string,
+    maxConcurrency = DEFAULT_MAX_CONCURRENCY
+  ): Promise<void> {
     // For backward compatibility, delegate to the new per-project method
     // But also maintain legacy state for existing code that might check it
     if (this.autoLoopRunning) {
@@ -717,6 +876,7 @@ export class AutoModeService {
       maxConcurrency,
       useWorktrees: true,
       projectPath,
+      branchName: null,
     };
 
     this.emitAutoModeEvent('auto_mode_started', {
@@ -752,7 +912,7 @@ export class AutoModeService {
     ) {
       try {
         // Check if we have capacity
-        if (this.runningFeatures.size >= (this.config?.maxConcurrency || 3)) {
+        if (this.runningFeatures.size >= (this.config?.maxConcurrency || DEFAULT_MAX_CONCURRENCY)) {
           await this.sleep(5000);
           continue;
         }
@@ -761,10 +921,22 @@ export class AutoModeService {
         const pendingFeatures = await this.loadPendingFeatures(this.config!.projectPath);
 
         if (pendingFeatures.length === 0) {
-          this.emitAutoModeEvent('auto_mode_idle', {
-            message: 'No pending features - auto mode idle',
-            projectPath: this.config!.projectPath,
-          });
+          // Emit idle event only once when backlog is empty AND no features are running
+          const runningCount = this.runningFeatures.size;
+          if (runningCount === 0 && !this.hasEmittedIdleEvent) {
+            this.emitAutoModeEvent('auto_mode_idle', {
+              message: 'No pending features - auto mode idle',
+              projectPath: this.config!.projectPath,
+            });
+            this.hasEmittedIdleEvent = true;
+            logger.info(`[AutoLoop] Backlog complete, auto mode now idle`);
+          } else if (runningCount > 0) {
+            logger.debug(
+              `[AutoLoop] No pending features, ${runningCount} still running, waiting...`
+            );
+          } else {
+            logger.debug(`[AutoLoop] No pending features, waiting for new items...`);
+          }
           await this.sleep(10000);
           continue;
         }
@@ -773,6 +945,8 @@ export class AutoModeService {
         const nextFeature = pendingFeatures.find((f) => !this.runningFeatures.has(f.id));
 
         if (nextFeature) {
+          // Reset idle event flag since we're doing work again
+          this.hasEmittedIdleEvent = false;
           // Start feature execution in background
           this.executeFeature(
             this.config!.projectPath,
@@ -862,6 +1036,9 @@ export class AutoModeService {
       await this.saveExecutionState(projectPath);
     }
 
+    // Declare feature outside try block so it's available in catch for error reporting
+    let feature: Awaited<ReturnType<typeof this.loadFeature>> | null = null;
+
     try {
       // Validate that project path is allowed using centralized validation
       validateWorkingDirectory(projectPath);
@@ -880,18 +1057,8 @@ export class AutoModeService {
         }
       }
 
-      // Emit feature start event early
-      this.emitAutoModeEvent('auto_mode_feature_start', {
-        featureId,
-        projectPath,
-        feature: {
-          id: featureId,
-          title: 'Loading...',
-          description: 'Feature is starting',
-        },
-      });
       // Load feature details FIRST to get branchName
-      const feature = await this.loadFeature(projectPath, featureId);
+      feature = await this.loadFeature(projectPath, featureId);
       if (!feature) {
         throw new Error(`Feature ${featureId} not found`);
       }
@@ -924,8 +1091,21 @@ export class AutoModeService {
       tempRunningFeature.worktreePath = worktreePath;
       tempRunningFeature.branchName = branchName ?? null;
 
-      // Update feature status to in_progress
+      // Update feature status to in_progress BEFORE emitting event
+      // This ensures the frontend sees the updated status when it reloads features
       await this.updateFeatureStatus(projectPath, featureId, 'in_progress');
+
+      // Emit feature start event AFTER status update so frontend sees correct status
+      this.emitAutoModeEvent('auto_mode_feature_start', {
+        featureId,
+        projectPath,
+        branchName: feature.branchName ?? null,
+        feature: {
+          id: featureId,
+          title: feature.title || 'Loading...',
+          description: feature.description || 'Feature is starting',
+        },
+      });
 
       // Load autoLoadClaudeMd setting to determine context loading strategy
       const autoLoadClaudeMd = await getAutoLoadClaudeMdSetting(
@@ -1070,6 +1250,8 @@ export class AutoModeService {
 
       this.emitAutoModeEvent('auto_mode_feature_complete', {
         featureId,
+        featureName: feature.title,
+        branchName: feature.branchName ?? null,
         passes: true,
         message: `Feature completed in ${Math.round(
           (Date.now() - tempRunningFeature.startTime) / 1000
@@ -1084,6 +1266,8 @@ export class AutoModeService {
       if (errorInfo.isAbort) {
         this.emitAutoModeEvent('auto_mode_feature_complete', {
           featureId,
+          featureName: feature?.title,
+          branchName: feature?.branchName ?? null,
           passes: false,
           message: 'Feature stopped by user',
           projectPath,
@@ -1093,6 +1277,8 @@ export class AutoModeService {
         await this.updateFeatureStatus(projectPath, featureId, 'backlog');
         this.emitAutoModeEvent('auto_mode_error', {
           featureId,
+          featureName: feature?.title,
+          branchName: feature?.branchName ?? null,
           error: errorInfo.message,
           errorType: errorInfo.type,
           projectPath,
@@ -1413,6 +1599,8 @@ Complete the pipeline step instructions above. Review the previous work and appl
 
       this.emitAutoModeEvent('auto_mode_feature_complete', {
         featureId,
+        featureName: feature.title,
+        branchName: feature.branchName ?? null,
         passes: true,
         message:
           'Pipeline step no longer exists - feature completed without remaining pipeline steps',
@@ -1526,6 +1714,7 @@ Complete the pipeline step instructions above. Review the previous work and appl
       this.emitAutoModeEvent('auto_mode_feature_start', {
         featureId,
         projectPath,
+        branchName: branchName ?? null,
         feature: {
           id: featureId,
           title: feature.title || 'Resuming Pipeline',
@@ -1535,8 +1724,9 @@ Complete the pipeline step instructions above. Review the previous work and appl
 
       this.emitAutoModeEvent('auto_mode_progress', {
         featureId,
-        content: `Resuming from pipeline step ${startFromStepIndex + 1}/${sortedSteps.length}`,
         projectPath,
+        branchName: branchName ?? null,
+        content: `Resuming from pipeline step ${startFromStepIndex + 1}/${sortedSteps.length}`,
       });
 
       // Load autoLoadClaudeMd setting
@@ -1565,6 +1755,8 @@ Complete the pipeline step instructions above. Review the previous work and appl
 
       this.emitAutoModeEvent('auto_mode_feature_complete', {
         featureId,
+        featureName: feature.title,
+        branchName: feature.branchName ?? null,
         passes: true,
         message: 'Pipeline resumed and completed successfully',
         projectPath,
@@ -1575,6 +1767,8 @@ Complete the pipeline step instructions above. Review the previous work and appl
       if (errorInfo.isAbort) {
         this.emitAutoModeEvent('auto_mode_feature_complete', {
           featureId,
+          featureName: feature.title,
+          branchName: feature.branchName ?? null,
           passes: false,
           message: 'Pipeline resume stopped by user',
           projectPath,
@@ -1584,6 +1778,8 @@ Complete the pipeline step instructions above. Review the previous work and appl
         await this.updateFeatureStatus(projectPath, featureId, 'backlog');
         this.emitAutoModeEvent('auto_mode_error', {
           featureId,
+          featureName: feature.title,
+          branchName: feature.branchName ?? null,
           error: errorInfo.message,
           errorType: errorInfo.type,
           projectPath,
@@ -1705,21 +1901,24 @@ Address the follow-up instructions above. Review the previous work and make the 
       provider,
     });
 
-    this.emitAutoModeEvent('auto_mode_feature_start', {
-      featureId,
-      projectPath,
-      feature: feature || {
-        id: featureId,
-        title: 'Follow-up',
-        description: prompt.substring(0, 100),
-      },
-      model,
-      provider,
-    });
-
     try {
-      // Update feature status to in_progress
+      // Update feature status to in_progress BEFORE emitting event
+      // This ensures the frontend sees the updated status when it reloads features
       await this.updateFeatureStatus(projectPath, featureId, 'in_progress');
+
+      // Emit feature start event AFTER status update so frontend sees correct status
+      this.emitAutoModeEvent('auto_mode_feature_start', {
+        featureId,
+        projectPath,
+        branchName,
+        feature: feature || {
+          id: featureId,
+          title: 'Follow-up',
+          description: prompt.substring(0, 100),
+        },
+        model,
+        provider,
+      });
 
       // Copy follow-up images to feature folder
       const copiedImagePaths: string[] = [];
@@ -1814,6 +2013,8 @@ Address the follow-up instructions above. Review the previous work and make the 
 
       this.emitAutoModeEvent('auto_mode_feature_complete', {
         featureId,
+        featureName: feature?.title,
+        branchName: branchName ?? null,
         passes: true,
         message: `Follow-up completed successfully${finalStatus === 'verified' ? ' - auto-verified' : ''}`,
         projectPath,
@@ -1825,6 +2026,8 @@ Address the follow-up instructions above. Review the previous work and make the 
       if (!errorInfo.isCancellation) {
         this.emitAutoModeEvent('auto_mode_error', {
           featureId,
+          featureName: feature?.title,
+          branchName: branchName ?? null,
           error: errorInfo.message,
           errorType: errorInfo.type,
           projectPath,
@@ -1852,6 +2055,9 @@ Address the follow-up instructions above. Review the previous work and make the 
    * Verify a feature's implementation
    */
   async verifyFeature(projectPath: string, featureId: string): Promise<boolean> {
+    // Load feature to get the name for event reporting
+    const feature = await this.loadFeature(projectPath, featureId);
+
     // Worktrees are in project dir
     const worktreePath = path.join(projectPath, '.worktrees', featureId);
     let workDir = projectPath;
@@ -1898,6 +2104,8 @@ Address the follow-up instructions above. Review the previous work and make the 
 
     this.emitAutoModeEvent('auto_mode_feature_complete', {
       featureId,
+      featureName: feature?.title,
+      branchName: feature?.branchName ?? null,
       passes: allPassed,
       message: allPassed
         ? 'All verification checks passed'
@@ -1974,6 +2182,8 @@ Address the follow-up instructions above. Review the previous work and make the 
 
       this.emitAutoModeEvent('auto_mode_feature_complete', {
         featureId,
+        featureName: feature?.title,
+        branchName: feature?.branchName ?? null,
         passes: true,
         message: `Changes committed: ${hash.trim().substring(0, 8)}`,
         projectPath,
@@ -2012,6 +2222,7 @@ Address the follow-up instructions above. Review the previous work and make the 
     this.emitAutoModeEvent('auto_mode_feature_start', {
       featureId: analysisFeatureId,
       projectPath,
+      branchName: null, // Project analysis is not worktree-specific
       feature: {
         id: analysisFeatureId,
         title: 'Project Analysis',
@@ -2096,6 +2307,8 @@ Format your response as a structured markdown document.`;
 
       this.emitAutoModeEvent('auto_mode_feature_complete', {
         featureId: analysisFeatureId,
+        featureName: 'Project Analysis',
+        branchName: null, // Project analysis is not worktree-specific
         passes: true,
         message: 'Project analysis completed',
         projectPath,
@@ -2104,6 +2317,8 @@ Format your response as a structured markdown document.`;
       const errorInfo = classifyError(error);
       this.emitAutoModeEvent('auto_mode_error', {
         featureId: analysisFeatureId,
+        featureName: 'Project Analysis',
+        branchName: null, // Project analysis is not worktree-specific
         error: errorInfo.message,
         errorType: errorInfo.type,
         projectPath,
@@ -2127,20 +2342,27 @@ Format your response as a structured markdown document.`;
   }
 
   /**
-   * Get status for a specific project
-   * @param projectPath - The project to get status for
+   * Get status for a specific project/worktree
+   * @param projectPath - The project path
+   * @param branchName - The branch name, or null for main worktree
    */
-  getStatusForProject(projectPath: string): {
+  getStatusForProject(
+    projectPath: string,
+    branchName: string | null = null
+  ): {
     isAutoLoopRunning: boolean;
     runningFeatures: string[];
     runningCount: number;
     maxConcurrency: number;
+    branchName: string | null;
   } {
-    const projectState = this.autoLoopsByProject.get(projectPath);
+    const worktreeKey = getWorktreeAutoLoopKey(projectPath, branchName);
+    const projectState = this.autoLoopsByProject.get(worktreeKey);
     const runningFeatures: string[] = [];
 
     for (const [featureId, feature] of this.runningFeatures) {
-      if (feature.projectPath === projectPath) {
+      // Filter by project path AND branchName to get worktree-specific features
+      if (feature.projectPath === projectPath && feature.branchName === branchName) {
         runningFeatures.push(featureId);
       }
     }
@@ -2149,21 +2371,39 @@ Format your response as a structured markdown document.`;
       isAutoLoopRunning: projectState?.isRunning ?? false,
       runningFeatures,
       runningCount: runningFeatures.length,
-      maxConcurrency: projectState?.config.maxConcurrency ?? 3,
+      maxConcurrency: projectState?.config.maxConcurrency ?? DEFAULT_MAX_CONCURRENCY,
+      branchName,
     };
   }
 
   /**
-   * Get all projects that have auto mode running
+   * Get all active auto loop worktrees with their project paths and branch names
    */
-  getActiveAutoLoopProjects(): string[] {
-    const activeProjects: string[] = [];
-    for (const [projectPath, state] of this.autoLoopsByProject) {
+  getActiveAutoLoopWorktrees(): Array<{ projectPath: string; branchName: string | null }> {
+    const activeWorktrees: Array<{ projectPath: string; branchName: string | null }> = [];
+    for (const [, state] of this.autoLoopsByProject) {
       if (state.isRunning) {
-        activeProjects.push(projectPath);
+        activeWorktrees.push({
+          projectPath: state.config.projectPath,
+          branchName: state.branchName,
+        });
       }
     }
-    return activeProjects;
+    return activeWorktrees;
+  }
+
+  /**
+   * Get all projects that have auto mode running (legacy, returns unique project paths)
+   * @deprecated Use getActiveAutoLoopWorktrees instead for full worktree information
+   */
+  getActiveAutoLoopProjects(): string[] {
+    const activeProjects = new Set<string>();
+    for (const [, state] of this.autoLoopsByProject) {
+      if (state.isRunning) {
+        activeProjects.add(state.config.projectPath);
+      }
+    }
+    return Array.from(activeProjects);
   }
 
   /**
@@ -2600,7 +2840,15 @@ Format your response as a structured markdown document.`;
     }
   }
 
-  private async loadPendingFeatures(projectPath: string): Promise<Feature[]> {
+  /**
+   * Load pending features for a specific project/worktree
+   * @param projectPath - The project path
+   * @param branchName - The branch name to filter by, or null for main worktree (features without branchName)
+   */
+  private async loadPendingFeatures(
+    projectPath: string,
+    branchName: string | null = null
+  ): Promise<Feature[]> {
     // Features are stored in .automaker directory
     const featuresDir = getFeaturesDir(projectPath);
 
@@ -2632,20 +2880,59 @@ Format your response as a structured markdown document.`;
 
           allFeatures.push(feature);
 
-          // Track pending features separately
+          // Track pending features separately, filtered by worktree/branch
           if (
             feature.status === 'pending' ||
             feature.status === 'ready' ||
             feature.status === 'backlog'
           ) {
-            pendingFeatures.push(feature);
+            // Filter by branchName:
+            // - If branchName is null (main worktree), include features with branchName === null OR branchName === "main"
+            // - If branchName is set, only include features with matching branchName
+            const featureBranch = feature.branchName ?? null;
+            if (branchName === null) {
+              // Main worktree: include features without branchName OR with branchName === "main"
+              // This handles both correct (null) and legacy ("main") cases
+              if (featureBranch === null || featureBranch === 'main') {
+                pendingFeatures.push(feature);
+              } else {
+                logger.debug(
+                  `[loadPendingFeatures] Filtering out feature ${feature.id} (branchName: ${featureBranch}) for main worktree`
+                );
+              }
+            } else {
+              // Feature worktree: include features with matching branchName
+              if (featureBranch === branchName) {
+                pendingFeatures.push(feature);
+              } else {
+                logger.debug(
+                  `[loadPendingFeatures] Filtering out feature ${feature.id} (branchName: ${featureBranch}, expected: ${branchName}) for worktree ${branchName}`
+                );
+              }
+            }
           }
         }
       }
 
-      logger.debug(
-        `[loadPendingFeatures] Found ${allFeatures.length} total features, ${pendingFeatures.length} with backlog/pending/ready status`
+      const worktreeDesc = branchName ? `worktree ${branchName}` : 'main worktree';
+      logger.info(
+        `[loadPendingFeatures] Found ${allFeatures.length} total features, ${pendingFeatures.length} with backlog/pending/ready status for ${worktreeDesc}`
       );
+
+      if (pendingFeatures.length === 0) {
+        logger.warn(
+          `[loadPendingFeatures] No pending features found for ${worktreeDesc}. Check branchName matching - looking for branchName: ${branchName === null ? 'null (main)' : branchName}`
+        );
+        // Log all backlog features to help debug branchName matching
+        const allBacklogFeatures = allFeatures.filter(
+          (f) => f.status === 'backlog' || f.status === 'pending' || f.status === 'ready'
+        );
+        if (allBacklogFeatures.length > 0) {
+          logger.info(
+            `[loadPendingFeatures] Found ${allBacklogFeatures.length} backlog features with branchNames: ${allBacklogFeatures.map((f) => `${f.id}(${f.branchName ?? 'null'})`).join(', ')}`
+          );
+        }
+      }
 
       // Apply dependency-aware ordering
       const { orderedFeatures } = resolveDependencies(pendingFeatures);
@@ -2655,11 +2942,41 @@ Format your response as a structured markdown document.`;
       const skipVerification = settings?.skipVerificationInAutoMode ?? false;
 
       // Filter to only features with satisfied dependencies
-      const readyFeatures = orderedFeatures.filter((feature: Feature) =>
-        areDependenciesSatisfied(feature, allFeatures, { skipVerification })
-      );
+      const readyFeatures: Feature[] = [];
+      const blockedFeatures: Array<{ feature: Feature; reason: string }> = [];
 
-      logger.debug(
+      for (const feature of orderedFeatures) {
+        const isSatisfied = areDependenciesSatisfied(feature, allFeatures, { skipVerification });
+        if (isSatisfied) {
+          readyFeatures.push(feature);
+        } else {
+          // Find which dependencies are blocking
+          const blockingDeps =
+            feature.dependencies?.filter((depId) => {
+              const dep = allFeatures.find((f) => f.id === depId);
+              if (!dep) return true; // Missing dependency
+              if (skipVerification) {
+                return dep.status === 'running';
+              }
+              return dep.status !== 'completed' && dep.status !== 'verified';
+            }) || [];
+          blockedFeatures.push({
+            feature,
+            reason:
+              blockingDeps.length > 0
+                ? `Blocked by dependencies: ${blockingDeps.join(', ')}`
+                : 'Unknown dependency issue',
+          });
+        }
+      }
+
+      if (blockedFeatures.length > 0) {
+        logger.info(
+          `[loadPendingFeatures] ${blockedFeatures.length} features blocked by dependencies: ${blockedFeatures.map((b) => `${b.feature.id} (${b.reason})`).join('; ')}`
+        );
+      }
+
+      logger.info(
         `[loadPendingFeatures] After dependency filtering: ${readyFeatures.length} ready features (skipVerification=${skipVerification})`
       );
 
@@ -3818,8 +4135,9 @@ After generating the revised spec, output:
       const state: ExecutionState = {
         version: 1,
         autoLoopWasRunning: this.autoLoopRunning,
-        maxConcurrency: this.config?.maxConcurrency ?? 3,
+        maxConcurrency: this.config?.maxConcurrency ?? DEFAULT_MAX_CONCURRENCY,
         projectPath,
+        branchName: null, // Legacy global auto mode uses main worktree
         runningFeatureIds: Array.from(this.runningFeatures.keys()),
         savedAt: new Date().toISOString(),
       };
@@ -3850,11 +4168,15 @@ After generating the revised spec, output:
   /**
    * Clear execution state (called on successful shutdown or when auto-loop stops)
    */
-  private async clearExecutionState(projectPath: string): Promise<void> {
+  private async clearExecutionState(
+    projectPath: string,
+    branchName: string | null = null
+  ): Promise<void> {
     try {
       const statePath = getExecutionStatePath(projectPath);
       await secureFs.unlink(statePath);
-      logger.info('Cleared execution state');
+      const worktreeDesc = branchName ? `worktree ${branchName}` : 'main worktree';
+      logger.info(`Cleared execution state for ${worktreeDesc}`);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
         logger.error('Failed to clear execution state:', error);

@@ -97,8 +97,25 @@ export function useBoardColumnFeatures({
       // Historically, we forced "running" features into in_progress so they never disappeared
       // during stale reload windows. With pipelines, a feature can legitimately be running while
       // its status is `pipeline_*`, so we must respect that status to render it in the right column.
+      // NOTE: runningAutoTasks is already worktree-scoped, so if a feature is in runningAutoTasks,
+      // it's already running for the current worktree. However, we still need to check matchesWorktree
+      // to ensure the feature's branchName matches the current worktree's branch.
       if (isRunning) {
-        if (!matchesWorktree) return;
+        // If feature is running but doesn't match worktree, it might be a timing issue where
+        // the feature was started for a different worktree. Still show it if it's running to
+        // prevent disappearing features, but log a warning.
+        if (!matchesWorktree) {
+          // This can happen if:
+          // 1. Feature was started for a different worktree (bug)
+          // 2. Timing issue where branchName hasn't been set yet
+          // 3. User switched worktrees while feature was starting
+          // Still show it in in_progress to prevent it from disappearing
+          console.debug(
+            `Feature ${f.id} is running but branchName (${featureBranch}) doesn't match current worktree branch (${effectiveBranch}) - showing anyway to prevent disappearing`
+          );
+          map.in_progress.push(f);
+          return;
+        }
 
         if (status.startsWith('pipeline_')) {
           if (!map[status]) map[status] = [];

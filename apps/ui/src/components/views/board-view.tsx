@@ -88,8 +88,8 @@ const logger = createLogger('Board');
 export function BoardView() {
   const {
     currentProject,
-    maxConcurrency,
-    setMaxConcurrency,
+    maxConcurrency: legacyMaxConcurrency,
+    setMaxConcurrency: legacySetMaxConcurrency,
     defaultSkipTests,
     specCreatingForProject,
     setSpecCreatingForProject,
@@ -261,11 +261,6 @@ export function BoardView() {
     loadPipelineConfig();
   }, [currentProject?.path, setPipelineConfig]);
 
-  // Auto mode hook
-  const autoMode = useAutoMode();
-  // Get runningTasks from the hook (scoped to current project)
-  const runningAutoTasks = autoMode.runningTasks;
-
   // Window state hook for compact dialog mode
   const { isMaximized } = useWindowState();
 
@@ -374,14 +369,6 @@ export function BoardView() {
     [hookFeatures, updateFeature, persistFeatureUpdate]
   );
 
-  // Get in-progress features for keyboard shortcuts (needed before actions hook)
-  const inProgressFeaturesForShortcuts = useMemo(() => {
-    return hookFeatures.filter((f) => {
-      const isRunning = runningAutoTasks.includes(f.id);
-      return isRunning || f.status === 'in_progress';
-    });
-  }, [hookFeatures, runningAutoTasks]);
-
   // Get current worktree info (path) for filtering features
   // This needs to be before useBoardActions so we can pass currentWorktreeBranch
   const currentWorktreeInfo = currentProject ? getCurrentWorktree(currentProject.path) : null;
@@ -407,6 +394,16 @@ export function BoardView() {
     }
   }, [worktrees, currentWorktreePath]);
 
+  // Auto mode hook - pass current worktree to get worktree-specific state
+  // Must be after selectedWorktree is defined
+  const autoMode = useAutoMode(selectedWorktree ?? undefined);
+  // Get runningTasks from the hook (scoped to current project/worktree)
+  const runningAutoTasks = autoMode.runningTasks;
+  // Get worktree-specific maxConcurrency from the hook
+  const maxConcurrency = autoMode.maxConcurrency;
+  // Get worktree-specific setter
+  const setMaxConcurrencyForWorktree = useAppStore((state) => state.setMaxConcurrencyForWorktree);
+
   // Get the current branch from the selected worktree (not from store which may be stale)
   const currentWorktreeBranch = selectedWorktree?.branch ?? null;
 
@@ -414,6 +411,15 @@ export function BoardView() {
   // Use the branch from selectedWorktree, or fall back to main worktree's branch
   const selectedWorktreeBranch =
     currentWorktreeBranch || worktrees.find((w) => w.isMain)?.branch || 'main';
+
+  // Get in-progress features for keyboard shortcuts (needed before actions hook)
+  // Must be after runningAutoTasks is defined
+  const inProgressFeaturesForShortcuts = useMemo(() => {
+    return hookFeatures.filter((f) => {
+      const isRunning = runningAutoTasks.includes(f.id);
+      return isRunning || f.status === 'in_progress';
+    });
+  }, [hookFeatures, runningAutoTasks]);
 
   // Calculate unarchived card counts per branch
   const branchCardCounts = useMemo(() => {
@@ -512,14 +518,14 @@ export function BoardView() {
 
       try {
         // Determine final branch name based on work mode:
-        // - 'current': Empty string to clear branch assignment (work on main/current branch)
+        // - 'current': Use selected worktree branch if available, otherwise undefined (work on main)
         // - 'auto': Auto-generate branch name based on current branch
         // - 'custom': Use the provided branch name
         let finalBranchName: string | undefined;
 
         if (workMode === 'current') {
-          // Empty string clears the branch assignment, moving features to main/current branch
-          finalBranchName = '';
+          // If a worktree is selected, use its branch; otherwise work on main (undefined = no branch assignment)
+          finalBranchName = currentWorktreeBranch || undefined;
         } else if (workMode === 'auto') {
           // Auto-generate a branch name based on primary branch (main/master) and timestamp
           // Always use primary branch to avoid nested feature/feature/... paths
@@ -605,6 +611,7 @@ export function BoardView() {
       exitSelectionMode,
       getPrimaryWorktreeBranch,
       addAndSelectWorktree,
+      currentWorktreeBranch,
       setWorktreeRefreshKey,
     ]
   );
@@ -1127,7 +1134,21 @@ export function BoardView() {
         projectPath={currentProject.path}
         maxConcurrency={maxConcurrency}
         runningAgentsCount={runningAutoTasks.length}
-        onConcurrencyChange={setMaxConcurrency}
+        onConcurrencyChange={(newMaxConcurrency) => {
+          if (currentProject && selectedWorktree) {
+            const branchName = selectedWorktree.isMain ? null : selectedWorktree.branch;
+            setMaxConcurrencyForWorktree(currentProject.id, branchName, newMaxConcurrency);
+            // Also update backend if auto mode is running
+            if (autoMode.isRunning) {
+              // Restart auto mode with new concurrency (backend will handle this)
+              autoMode.stop().then(() => {
+                autoMode.start().catch((error) => {
+                  logger.error('[AutoMode] Failed to restart with new concurrency:', error);
+                });
+              });
+            }
+          }
+        }}
         isAutoModeRunning={autoMode.isRunning}
         onAutoModeToggle={(enabled) => {
           if (enabled) {

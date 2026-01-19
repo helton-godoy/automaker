@@ -29,6 +29,7 @@ import {
   Terminal,
   SquarePlus,
   SplitSquareHorizontal,
+  Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -56,6 +57,8 @@ interface WorktreeActionsDropdownProps {
   gitRepoStatus: GitRepoStatus;
   /** When true, renders as a standalone button (not attached to another element) */
   standalone?: boolean;
+  /** Whether auto mode is running for this worktree */
+  isAutoModeRunning?: boolean;
   onOpenChange: (open: boolean) => void;
   onPull: (worktree: WorktreeInfo) => void;
   onPush: (worktree: WorktreeInfo) => void;
@@ -73,6 +76,7 @@ interface WorktreeActionsDropdownProps {
   onOpenDevServerUrl: (worktree: WorktreeInfo) => void;
   onViewDevServerLogs: (worktree: WorktreeInfo) => void;
   onRunInitScript: (worktree: WorktreeInfo) => void;
+  onToggleAutoMode?: (worktree: WorktreeInfo) => void;
   hasInitScript: boolean;
 }
 
@@ -88,6 +92,7 @@ export function WorktreeActionsDropdown({
   devServerInfo,
   gitRepoStatus,
   standalone = false,
+  isAutoModeRunning = false,
   onOpenChange,
   onPull,
   onPush,
@@ -105,6 +110,7 @@ export function WorktreeActionsDropdown({
   onOpenDevServerUrl,
   onViewDevServerLogs,
   onRunInitScript,
+  onToggleAutoMode,
   hasInitScript,
 }: WorktreeActionsDropdownProps) {
   // Get available editors for the "Open In" submenu
@@ -211,6 +217,26 @@ export function WorktreeActionsDropdown({
               <Play className={cn('w-3.5 h-3.5 mr-2', isStartingDevServer && 'animate-pulse')} />
               {isStartingDevServer ? 'Starting...' : 'Start Dev Server'}
             </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
+        {/* Auto Mode toggle */}
+        {onToggleAutoMode && (
+          <>
+            {isAutoModeRunning ? (
+              <DropdownMenuItem onClick={() => onToggleAutoMode(worktree)} className="text-xs">
+                <span className="flex items-center mr-2">
+                  <Zap className="w-3.5 h-3.5 text-yellow-500" />
+                  <span className="ml-0.5 h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                </span>
+                Stop Auto Mode
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem onClick={() => onToggleAutoMode(worktree)} className="text-xs">
+                <Zap className="w-3.5 h-3.5 mr-2" />
+                Start Auto Mode
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
           </>
         )}

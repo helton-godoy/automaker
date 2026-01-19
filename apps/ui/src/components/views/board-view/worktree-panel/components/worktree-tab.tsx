@@ -29,6 +29,8 @@ interface WorktreeTabProps {
   aheadCount: number;
   behindCount: number;
   gitRepoStatus: GitRepoStatus;
+  /** Whether auto mode is running for this worktree */
+  isAutoModeRunning?: boolean;
   onSelectWorktree: (worktree: WorktreeInfo) => void;
   onBranchDropdownOpenChange: (open: boolean) => void;
   onActionsDropdownOpenChange: (open: boolean) => void;
@@ -51,6 +53,7 @@ interface WorktreeTabProps {
   onOpenDevServerUrl: (worktree: WorktreeInfo) => void;
   onViewDevServerLogs: (worktree: WorktreeInfo) => void;
   onRunInitScript: (worktree: WorktreeInfo) => void;
+  onToggleAutoMode?: (worktree: WorktreeInfo) => void;
   hasInitScript: boolean;
 }
 
@@ -75,6 +78,7 @@ export function WorktreeTab({
   aheadCount,
   behindCount,
   gitRepoStatus,
+  isAutoModeRunning = false,
   onSelectWorktree,
   onBranchDropdownOpenChange,
   onActionsDropdownOpenChange,
@@ -97,6 +101,7 @@ export function WorktreeTab({
   onOpenDevServerUrl,
   onViewDevServerLogs,
   onRunInitScript,
+  onToggleAutoMode,
   hasInitScript,
 }: WorktreeTabProps) {
   let prBadge: JSX.Element | null = null;
@@ -332,6 +337,26 @@ export function WorktreeTab({
         </TooltipProvider>
       )}
 
+      {isAutoModeRunning && (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                className={cn(
+                  'flex items-center justify-center h-7 px-1.5 rounded-none border-r-0',
+                  isSelected ? 'bg-primary text-primary-foreground' : 'bg-secondary/50'
+                )}
+              >
+                <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Auto Mode Running</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+
       <WorktreeActionsDropdown
         worktree={worktree}
         isSelected={isSelected}
@@ -343,6 +368,7 @@ export function WorktreeTab({
         isDevServerRunning={isDevServerRunning}
         devServerInfo={devServerInfo}
         gitRepoStatus={gitRepoStatus}
+        isAutoModeRunning={isAutoModeRunning}
         onOpenChange={onActionsDropdownOpenChange}
         onPull={onPull}
         onPush={onPush}
@@ -360,6 +386,7 @@ export function WorktreeTab({
         onOpenDevServerUrl={onOpenDevServerUrl}
         onViewDevServerLogs={onViewDevServerLogs}
         onRunInitScript={onRunInitScript}
+        onToggleAutoMode={onToggleAutoMode}
         hasInitScript={hasInitScript}
       />
     </div>
