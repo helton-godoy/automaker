@@ -1,0 +1,86 @@
+{
+  "common": {
+    "loading": "Carregando...",
+    "error": "Erro",
+    "success": "Sucesso",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar",
+    "save": "Salvar",
+    "delete": "Excluir",
+    "edit": "Editar",
+    "add": "Adicionar",
+    "remove": "Remover",
+    "close": "Fechar",
+    "back": "Voltar",
+    "next": "Próximo",
+    "previous": "Anterior",
+    "search": "Pesquisar",
+    "filter": "Filtrar",
+    "settings": "Configurações",
+    "language": "Idioma"
+  },
+  "navigation": {
+    "home": "Início",
+    "dashboard": "Painel",
+    "projects": "Projetos",
+    "workspace": "Espaço de Trabalho",
+    "terminal": "Terminal",
+    "files": "Arquivos",
+    "git": "Git",
+    "issues": "Issues"
+  },
+  "project": {
+    "new": "Novo Projeto",
+    "open": "Abrir Projeto",
+    "import": "Importar Projeto",
+    "export": "Exportar Projeto",
+    "name": "Nome do Projeto",
+    "description": "Descrição",
+    "path": "Caminho do Projeto",
+    "selectFolder": "Selecionar Pasta",
+    "noProjects": "Nenhum projeto ainda",
+    "createFirst": "Crie seu primeiro projeto para começar"
+  },
+  "workspace": {
+    "title": "Espaço de Trabalho",
+    "empty": "O espaço de trabalho está vazio",
+    "dragDrop": "Arraste e solte arquivos aqui",
+    "openFile": "Abrir Arquivo",
+    "saveFile": "Salvar Arquivo",
+    "unsavedChanges": "Você tem alterações não salvas"
+  },
+  "terminal": {
+    "title": "Terminal",
+    "newSession": "Nova Sessão",
+    "clear": "Limpar",
+    "copy": "Copiar",
+    "paste": "Colar",
+    "restart": "Reiniciar"
+  },
+  "git": {
+    "commit": "Commit",
+    "push": "Push",
+    "pull": "Pull",
+    "branch": "Branch",
+    "merge": "Merge",
+    "conflict": "Conflito",
+    "changes": "Alterações",
+    "staged": "Preparado (Staged)",
+    "unstaged": "Não preparado (Unstaged)"
+  },
+  "agent": {
+    "running": "Agente em execução",
+    "idle": "Agente inativo",
+    "stop": "Parar Agente",
+    "start": "Iniciar Agente",
+    "task": "Tarefa",
+    "progress": "Progresso"
+  },
+  "errors": {
+    "generic": "Ocorreu um erro",
+    "network": "Erro de rede. Por favor, verifique sua conexão.",
+    "notFound": "Não encontrado",
+    "permission": "Permissão negada",
+    "invalidInput": "Entrada inválida"
+  }
+}

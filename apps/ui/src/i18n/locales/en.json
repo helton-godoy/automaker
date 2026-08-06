@@ -1,0 +1,86 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "add": "Add",
+    "remove": "Remove",
+    "close": "Close",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "search": "Search",
+    "filter": "Filter",
+    "settings": "Settings",
+    "language": "Language"
+  },
+  "navigation": {
+    "home": "Home",
+    "dashboard": "Dashboard",
+    "projects": "Projects",
+    "workspace": "Workspace",
+    "terminal": "Terminal",
+    "files": "Files",
+    "git": "Git",
+    "issues": "Issues"
+  },
+  "project": {
+    "new": "New Project",
+    "open": "Open Project",
+    "import": "Import Project",
+    "export": "Export Project",
+    "name": "Project Name",
+    "description": "Description",
+    "path": "Project Path",
+    "selectFolder": "Select Folder",
+    "noProjects": "No projects yet",
+    "createFirst": "Create your first project to get started"
+  },
+  "workspace": {
+    "title": "Workspace",
+    "empty": "Workspace is empty",
+    "dragDrop": "Drag and drop files here",
+    "openFile": "Open File",
+    "saveFile": "Save File",
+    "unsavedChanges": "You have unsaved changes"
+  },
+  "terminal": {
+    "title": "Terminal",
+    "newSession": "New Session",
+    "clear": "Clear",
+    "copy": "Copy",
+    "paste": "Paste",
+    "restart": "Restart"
+  },
+  "git": {
+    "commit": "Commit",
+    "push": "Push",
+    "pull": "Pull",
+    "branch": "Branch",
+    "merge": "Merge",
+    "conflict": "Conflict",
+    "changes": "Changes",
+    "staged": "Staged",
+    "unstaged": "Unstaged"
+  },
+  "agent": {
+    "running": "Agent is running",
+    "idle": "Agent is idle",
+    "stop": "Stop Agent",
+    "start": "Start Agent",
+    "task": "Task",
+    "progress": "Progress"
+  },
+  "errors": {
+    "generic": "An error occurred",
+    "network": "Network error. Please check your connection.",
+    "notFound": "Not found",
+    "permission": "Permission denied",
+    "invalidInput": "Invalid input"
+  }
+}
